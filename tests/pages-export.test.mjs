@@ -7,7 +7,7 @@ test("GitHub Pages export contains app, repository paths and downloads", async (
   const basePath = `/${configuredBasePath.trim().replace(/^\/+|\/+$/g, "")}`.replace(/^\/$/, "");
   const assetBase = basePath ? `${basePath}/assets/` : "/assets/";
   const html = await readFile(new URL("../dist/pages/index.html", import.meta.url), "utf8");
-  assert.match(html, /Activity Atlas/);
+  assert.match(html, /Crypto Exchanges Activity/);
   assert.ok(html.includes(assetBase), `expected HTML asset path to include ${assetBase}`);
   const assets = await readdir(new URL("../dist/pages/assets/", import.meta.url));
   const script = assets.find((file) => file.endsWith(".js"));

@@ -809,3 +809,45 @@ main { max-width: 1540px; margin: auto; }
   .relative-value { font-size: 38px; }
   .chapter-heading h2 { font-size: 30px; }
 }
+
+/* Readable context and one continuous platform analysis. */
+.topbar { grid-template-columns: minmax(300px, 1fr) auto auto; }
+.brand { min-width: 0; }
+.brand-name { display: block; font-size: 20px; line-height: 1.2; }
+.brand-name small { display: block; max-width: 380px; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.35; font-weight: 400; letter-spacing: 0; }
+.recap-card { position: relative; }
+.recap-card:hover, .recap-card:focus-within { border-color: var(--category-color); }
+.recap-link { display: flex; justify-content: space-between; gap: 12px; padding: 14px 0; color: var(--text); font-size: 15px; font-weight: 600; text-decoration: none; }
+.recap-link::after { content: ""; position: absolute; inset: 0; border-radius: 4px; }
+.recap-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 4px; }
+.recap-link > span { color: var(--category-color); font-size: 20px; }
+.section-head p:not(.section-kicker), .story-heading > p, .relative-copy > p:not(.section-kicker), .chapter-heading > p { font-size: 16px; line-height: 1.65; }
+.breakdown-section > .section-head { align-items: flex-start; border-bottom: 0; padding-bottom: 10px; }
+.breakdown-section .section-head p { max-width: 850px; }
+.breakdown-context { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-top: 16px; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.breakdown-context > b { color: var(--text); }
+.breakdown-context.is-old .older-observation { color: var(--warm); }
+.breakdown-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding-top: 16px; padding-bottom: 14px; }
+.breakdown-controls label { min-width: 0; color: var(--text); font-size: 16px; font-weight: 550; }
+.breakdown-controls select { width: 100%; min-width: 0; min-height: 52px; padding: 12px 30px 12px 14px; font-size: 16px; font-weight: 400; }
+.group-help { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.breakdown-reading { padding-top: 16px; }
+.breakdown-reading > span, .share-key, .insight-note, .display-note, .finding-line p { font-size: 16px; line-height: 1.65; }
+.share-key small, .overview-footnote, .composition-note-grid p, .venue-definitions p, .warning-grid p { font-size: 14px; line-height: 1.65; }
+.source-details summary { font-size: 15px; }
+.composition-controls .segmented button { font-size: 15px; }
+.composition-facts b { font-size: 14px; }
+@media (max-width: 1100px) {
+  html { scroll-padding-top: 145px; }
+  .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+}
+@media (max-width: 760px) {
+  .brand-name { font-size: 18px; }
+  .brand-name small { font-size: 11px; }
+  .topbar { column-gap: 12px; }
+  .breakdown-controls { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .breakdown-context { font-size: 15px; }
+}
+@media (max-width: 480px) {
+  .breakdown-controls { grid-template-columns: 1fr; }
+}

@@ -6,7 +6,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Activity Atlas — Market Activity Comparison",
+  title: "Crypto Exchanges Activity — Market Activity Comparison",
   description: "Compare centralized perpetuals, perp DEXs, and prediction markets from 2023 to today.",
 };
 

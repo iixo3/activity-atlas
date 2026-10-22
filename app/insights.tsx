@@ -11,6 +11,8 @@ const day = (date: string) => new Intl.DateTimeFormat("en", { day: "numeric", mo
 const dollars = (value: number) => new Intl.NumberFormat("en", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 }).format(value);
 const signed = (value: number) => `${value > 0 ? "+" : ""}${value.toLocaleString("en", { maximumFractionDigits: 1 })}%`;
 const name = (category: Category, metric: Metric) => category === "dex" && metric === "oi" ? "Hyperliquid only" : LABELS[category];
+export const dimensionLabel = (dimension: { id: string; label: string }) => dimension.id === "operator" ? "Market provider"
+  : dimension.id === "instrument" && dimension.label === "Underlying" ? "Individual assets" : dimension.label;
 const scope = (category: Category, metric: Metric) => category === "cex"
   ? (metric === "volume" ? "Binance perpetuals + Bybit & Kraken futures" : "Binance, Bybit & Kraken · BTC + ETH futures only")
   : category === "dex" ? (metric === "volume" ? "Perpetual DEXs · all venues in our source" : "Historical DEX coverage is Hyperliquid only")
@@ -37,7 +39,7 @@ export function Freshness({ data, refreshWarning, staleSnapshot }: { data: Dashb
   </div>;
 }
 
-export function Overview({ data }: { data: DashboardData }) {
+export function Overview({ data, onExplore }: { data: DashboardData; onExplore: (category: Category, metric: Metric) => void }) {
   const [metric, setMetric] = useState<Metric>("volume");
   const [start, setStart] = useState<string>();
   const [end, setEnd] = useState<string>();
@@ -111,6 +113,7 @@ export function Overview({ data }: { data: DashboardData }) {
           <div className="change-track" aria-hidden="true"><i className="change-zero" /><i className="change-fill" style={{ left: `${row.change != null && row.change < 0 ? 50 - Math.abs(row.change) / maximum * 50 : 50}%`, width: `${Math.abs(row.change ?? 0) / maximum * 50}%` }} /></div>
           <div className="change-axis"><span>Decrease</span><span>0</span><span>Increase</span></div>
           <div className="secondary-metric"><span>{metric === "volume" ? (category === "dex" ? "Open interest · Hyperliquid only" : category === "cex" ? "Open interest · BTC + ETH only" : "Open interest · month-end") : "Monthly trading volume"}</span><b>{secondary ? dollars(secondary.value) : "Unavailable"}</b></div>
+          <a className="recap-link" href="#venues" onClick={() => onExplore(category, metric)} aria-label={`Explore ${LABELS[category]} ${metric === "volume" ? "trading volume" : "open interest"}`}>Explore this category <span aria-hidden="true">↘</span></a>
         </article>;
       })}
     </div>
@@ -160,14 +163,14 @@ export function Breakdown({ data }: { data: DashboardData }) {
   const featured = result.rows[0];
   const isOld = result.snapshot ? !result.observedAt || Date.parse(now) - Date.parse(result.observedAt) > 3 * 86400000 : (result.date ?? "").slice(0, 7) < data.meta.completeThrough;
   return <section className="section-block breakdown-section" id="breakdown" aria-labelledby="breakdown-title">
-    <div className="section-head"><div><p className="section-kicker">LOOK INSIDE A PLATFORM</p><h2 id="breakdown-title">Lots of trading, little open interest?</h2><p>See which segments account for the trading—and which account for contracts still open. Different shares are a clue to explore, not proof of inflated activity.</p></div><a className="section-jump" href="#composition">Explore the history ↗</a></div>
+    <div className="section-head"><div><p className="section-kicker">LOOK INSIDE A PLATFORM</p><h2 id="breakdown-title">Lots of trading, little open interest?</h2><p>Compare each segment’s share of trading with its share of open interest. A difference is a clue to explore, not proof of inflated activity.</p><div className={`breakdown-context ${isOld ? "is-old" : ""}`}><b>{venue.label}</b><span>{result.snapshot ? `Collected ${result.observedAt ? day(result.observedAt) : "date unknown"}` : `Complete month: ${result.date ? month(result.date) : "unavailable"}`}</span>{isOld && <span className="older-observation">Older data · newer observations are unavailable for this view.</span>}</div></div><a className="section-jump" href="#composition">Explore the history ↗</a></div>
     <div className="breakdown-controls">
       <label>Platform<select aria-label="Platform" value={venue.id} onChange={(event) => { setVenueId(event.target.value); setDimensionId(undefined); setSelectedDate(undefined); setMode("current"); setShowAll(false); }}>{data.composition.venues.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-      <label>Group by<select aria-label="Group by" value={dimension} onChange={(event) => { setDimensionId(event.target.value); setSelectedDate(undefined); setShowAll(false); }}>{venue.dimensions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      <label>Group by<select aria-label="Group by" value={dimension} onChange={(event) => { setDimensionId(event.target.value); setSelectedDate(undefined); setShowAll(false); }}>{venue.dimensions.map((item) => <option key={item.id} value={item.id}>{dimensionLabel(item)}</option>)}</select></label>
       {venue.id === "hyperliquid" && <label>View<select aria-label="View" value={mode} onChange={(event) => { setMode(event.target.value); setSelectedDate(undefined); }}><option value="current">Current snapshot</option><option value="historical">Complete-month history</option></select></label>}
       <label>{result.snapshot ? "Snapshot month" : "Complete month"}<select value={result.date ?? ""} onChange={(event) => setSelectedDate(event.target.value)}>{result.dates.map((date) => <option key={date} value={date}>{month(date)}</option>)}</select></label>
+      {dimension === "operator" && <p className="group-help">Market provider = who lists the contract. This may differ from the issuer of the underlying asset.</p>}
     </div>
-    <div className={`breakdown-dates ${isOld ? "is-old" : ""}`}><b>{result.snapshot ? `Collected ${result.observedAt ? day(result.observedAt) : "date unknown"}` : `Full-month comparison · ${result.date ? month(result.date) : "unavailable"}`}</b><span>{isOld ? "Older data · newer observations are unavailable for this view." : result.snapshot ? "Rolling trading activity compared with positions open at collection." : "Both measures cover the same complete month."}</span></div>
     {!result.rows.length ? <p className="insight-note">{result.reason}</p> : <>
       <div className="breakdown-reading"><p><b>{featured.group}</b> accounts for <strong>{featured.volumeShare.toFixed(1)}%</strong> of trading and <strong>{featured.oiShare.toFixed(1)}%</strong> of open interest.</p><span>Largest share difference in this breakdown. Short holding periods or contract settlement can also create a gap.</span></div>
       <div className="share-key"><span><i className="trading-key" />{volumePeriod} <b>{value(result.volumeTotal)}</b></span><span><i className="interest-key" />{interestPeriod} <b>{value(result.oiTotal)}</b></span><small>Each bar runs from 0% to 100% of its own total.</small></div>

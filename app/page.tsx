@@ -11,7 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { displayPoints, partialVolumeProjection, percentBounds, resolveDateRange, shouldUseLogScale, toggleAllHidden } from "../lib/activity-math.mjs";
-import { Breakdown, DataHealth, Freshness, Overview } from "./insights";
+import { Breakdown, DataHealth, Freshness, Overview, dimensionLabel } from "./insights";
 
 export type Category = "cex" | "dex" | "prediction";
 type VenueCategory = Category | "cex-hl";
@@ -938,13 +938,22 @@ export default function Home() {
     setTheme((current) => current === "dark" ? "light" : "dark");
   }
 
+  function exploreCategory(category: Category, metric: Metric) {
+    setVenueCategory(category);
+    setVenueMetric(metric);
+    window.requestAnimationFrame(() => {
+      document.getElementById("venues-title")?.focus({ preventScroll: true });
+      document.getElementById("venues")?.scrollIntoView({ block: "start" });
+    });
+  }
+
   return (
     <ChartRangeProvider>
     <main>
       <header className="topbar">
-        <a className="brand" href="#overview" aria-label="Activity Atlas home">
+        <a className="brand" href="#overview" aria-label="Crypto Exchanges Activity home">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Activity Atlas</span>
+          <span className="brand-name">Crypto Exchanges Activity<small>Centralized exchanges, onchain perpetuals &amp; prediction markets</small></span>
         </a>
         <nav aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
@@ -960,7 +969,7 @@ export default function Home() {
       </header>
 
       {data && <Freshness data={data} refreshWarning={refreshWarning} staleSnapshot={staleSnapshot} />}
-      {data && <Overview data={data} />}
+      {data && <Overview data={data} onExplore={exploreCategory} />}
       {!data && !loadError && <div className="loading-state">Loading the market overview…</div>}
       {loadError && <div className="error-state">Could not load the dashboard data. Check your connection and reload this page.</div>}
       {data && <Breakdown data={data} />}
@@ -999,7 +1008,7 @@ export default function Home() {
         <div className="section-head section-head-stacked">
           <div>
             <p className="section-kicker">PLATFORM DRILLDOWN</p>
-            <h2 id="venues-title">Inside each category</h2>
+            <h2 id="venues-title" tabIndex={-1}>Inside {venueCategory === "cex-hl" ? "CEX / Hyperliquid" : CATEGORY_LABELS[venueCategory].toLowerCase()}</h2>
             <p>{venueCategory === "dex" && venueMetric === "volume" ? "Top 10 by observed cumulative volume. Raw current MTD is included so new venues stay visible; ranking is provisional until month-end." : "Venue-level series using the best free history found."}</p>
           </div>
           <div className="venue-controls">
@@ -1088,7 +1097,7 @@ export default function Home() {
               </div>
               <div className="segmented" role="group" aria-label="Breakdown dimension">
                 {compositionVenue.dimensions.map((dimension) => (
-                  <button key={dimension.id} type="button" className={activeCompositionDimension === dimension.id ? "active" : ""} aria-pressed={activeCompositionDimension === dimension.id} onClick={() => setCompositionDimension(dimension.id)}>{dimension.label}</button>
+                  <button key={dimension.id} type="button" className={activeCompositionDimension === dimension.id ? "active" : ""} aria-pressed={activeCompositionDimension === dimension.id} onClick={() => setCompositionDimension(dimension.id)}>{dimensionLabel(dimension)}</button>
                 ))}
               </div>
               <div className="segmented metric-tabs" role="group" aria-label="Composition metric">
@@ -1126,12 +1135,12 @@ export default function Home() {
               key={`composition-${compositionVenue.id}-${activeCompositionDimension}-${activeCompositionMetric}`}
               chartId="composition-analysis"
               rangeKey="composition-analysis"
-              title={`${compositionVenue.label} · ${compositionMetricConfig?.label ?? activeCompositionMetric} by ${compositionVenue.dimensions.find((item) => item.id === activeCompositionDimension)?.label ?? activeCompositionDimension}`}
+              title={`${compositionVenue.label} · ${compositionMetricConfig?.label ?? activeCompositionMetric} by ${dimensionLabel(compositionVenue.dimensions.find((item) => item.id === activeCompositionDimension) ?? { id: activeCompositionDimension, label: activeCompositionDimension })}`}
               series={compositionSeries}
               view={compositionMetricConfig?.unit === "multiple" ? "absolute" : compositionView}
               metric={compositionSeries[0]?.metric ?? "snapshot"}
               valueUnit={compositionMetricConfig?.unit ?? "usd"}
-              axisLabel={compositionMetricConfig?.unit === "multiple" ? "TRADING / OPEN POSITIONS" : `${compositionMetricConfig?.label.toUpperCase() ?? "ACTIVITY"} · ${compositionMetricConfig?.unit === "contracts" ? "CONTRACTS" : "USD"}`}
+              axisLabel={compositionMetricConfig?.unit === "multiple" ? "TRADING / OPEN INTEREST" : `${compositionMetricConfig?.label.toUpperCase() ?? "ACTIVITY"} · ${compositionMetricConfig?.unit === "contracts" ? "CONTRACTS" : "USD"}`}
               defaultStart="2023-01-01"
               completeThrough={data.meta.completeThrough}
               generatedAt={data.meta.generatedAt}
@@ -1141,7 +1150,7 @@ export default function Home() {
             />
             <div className="composition-note-grid">
               <p><b>Coverage</b>{compositionVenue.coverageNote ?? "Coverage begins at the first verified public observation."}</p>
-              <p><b>Classification</b>{compositionVenue.id === "hyperliquid" ? "Operator / deployer identifies who listed a HIP-3 market; it is not automatically the legal issuer of the referenced asset. Underlying labels are kept separately." : "Official taxonomy is used where available; deterministic mappings are disclosed, and unresolved labels stay Unclassified."}</p>
+              <p><b>Classification</b>{compositionVenue.id === "hyperliquid" ? "Market provider identifies who lists a contract; this is not necessarily the issuer of its underlying asset. Individual assets are listed separately." : "Official taxonomy is used where available; deterministic mappings are disclosed, and unresolved labels stay Unclassified."}</p>
               <p><b>Current period</b>Incomplete calendar-month flows are dashed run-rate previews. OI and rolling snapshot metrics are never time-extrapolated.</p>
             </div>
             {data.composition.meta.warnings.length > 0 && (
@@ -1264,7 +1273,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <span>Activity Atlas · public data, explained</span>
+        <span>Crypto Exchanges Activity · public data, explained</span>
         <span>Generated {snapshotDate} · current month shown as partial</span>
       </footer>
     </main>

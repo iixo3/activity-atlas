@@ -19,12 +19,12 @@ async function render() {
   );
 }
 
-test("server-renders Activity Atlas", async () => {
+test("server-renders Crypto Exchanges Activity", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /Activity Atlas/);
+  assert.match(html, /Crypto Exchanges Activity/);
   assert.match(html, /Follow the story over time/);
   assert.match(html, /How activity has changed/i);
   assert.match(html, /CEX \/ Hyperliquid/);

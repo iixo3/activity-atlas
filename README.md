@@ -1,4 +1,4 @@
-# Activity Atlas
+# Crypto Exchanges Activity
 
 Hosted dashboard: [https://iixo3.github.io/activity-atlas/](https://iixo3.github.io/activity-atlas/)
 
