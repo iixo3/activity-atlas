@@ -11,6 +11,16 @@ Local, source-audited dashboard comparing activity across:
 
 The default window starts in January 2023. Prediction-market drilldowns retain earlier coverage from September 2020. The dashboard displays its exact latest refresh time, full-month cutoff, and source coverage.
 
+## Reading the dashboard
+
+The opening compares category totals and growth between two matching complete months. It never uses the partial-month estimate for its headline. The relative-size graphic shows one group's reported dollars per $100 of the reference group; it is not global market share or evidence of money moving between groups.
+
+The platform breakdown opens on current Hyperliquid observations. Paired bars compare trading share with open-position share, with the measurement periods visible. Historical complete-month breakdowns remain selectable. Kalshi prediction breakdowns use contract counts, not dollars paid. Line charts and correlation statistics remain available further down the page.
+
+Source freshness is evaluated from observation dates, independently of the file's refresh timestamp. Unknown publication cutoffs remain unknown; older Hyperliquid composition and Coinbase OI are explicitly flagged. Temporary core fetch failures retry up to three times. Incomplete Kalshi pagination or failed perp market feeds cannot replace a complete cached breakdown. GitHub runs include a source-health report.
+
+`data/normalized/composition-observations.json` retains dated category/operator observations at each successful collection. Rolling 24h/30d volumes overlap and must not be summed into monthly totals. Missing historical observations are not reconstructed.
+
 ## Run locally
 
 Requires Node.js `>=22.13.0`.
@@ -43,7 +53,7 @@ npm run test:pages
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml` refreshes, verifies, and deploys the static dashboard on every `main` push, on manual dispatch, and at 08:00/16:00 Europe/Paris. Successful runs commit compact continuity files so Coinbase OI and incomplete-month observations accumulate across runs. Raw provider responses stay local and out of Git.
+`.github/workflows/pages.yml` refreshes, verifies, and deploys the static dashboard on every `main` push, on manual dispatch, and at 08:00/16:00 Europe/Paris. An hourly lightweight check retries an overdue refresh window and skips full work when that window already completed. Successful runs commit compact continuity files so Coinbase OI and incomplete-month observations accumulate across runs. Raw provider responses stay local and out of Git.
 
 Hosted refreshes retain the last valid snapshot when an optional provider fails. Dune-derived Hyperliquid/Polymarket composition history currently remains cached because the connected free Dune account has no query credits. Current Hyperliquid composition refreshes separately from its official API; core category and venue activity continues refreshing from public sources. Source timestamps expose this difference.
 

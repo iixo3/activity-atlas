@@ -11,12 +11,13 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { displayPoints, partialVolumeProjection, percentBounds, resolveDateRange, shouldUseLogScale, toggleAllHidden } from "../lib/activity-math.mjs";
+import { Breakdown, DataHealth, Freshness, Overview } from "./insights";
 
-type Category = "cex" | "dex" | "prediction";
+export type Category = "cex" | "dex" | "prediction";
 type VenueCategory = Category | "cex-hl";
-type Metric = "volume" | "oi";
+export type Metric = "volume" | "oi";
 type ViewMode = "percent" | "absolute" | "btc" | "share";
-type ValueUnit = "usd" | "multiple";
+type ValueUnit = "usd" | "multiple" | "contracts";
 type Theme = "dark" | "light";
 type ChartRangeSelection = { start: string | null; end: string | null };
 const EMPTY_CHART_RANGE: ChartRangeSelection = { start: null, end: null };
@@ -98,7 +99,7 @@ type PairResult = {
   start: string | null;
   end: string | null;
 };
-type DashboardData = {
+export type DashboardData = {
   meta: {
     title: string;
     generatedAt: string;
@@ -260,11 +261,11 @@ function firstObserved(points: Point[]) {
 function correlationTone(value: number | null) {
   if (value == null) return "Unavailable";
   const absolute = Math.abs(value);
-  const direction = value < 0 ? "inverse" : "positive";
-  if (absolute < 0.2) return "Little association";
-  if (absolute < 0.4) return `Weak ${direction}`;
-  if (absolute < 0.7) return `Moderate ${direction}`;
-  return `Strong ${direction}`;
+  const direction = value < 0 ? "opposite patterns" : "similar patterns";
+  if (absolute < 0.2) return "No clear linear pattern";
+  if (absolute < 0.4) return `Slightly ${direction}`;
+  if (absolute < 0.7) return `Moderately ${direction}`;
+  return `Strongly ${direction}`;
 }
 
 function useElementWidth<T extends HTMLElement>() {
@@ -599,7 +600,7 @@ function InteractiveChart({
               <g key={tick}>
                 <line x1={margin.left} x2={width - margin.right} y1={yPosition} y2={yPosition} stroke={(view === "percent" || view === "share") && tick === 0 ? chartColors.muted : chartColors.grid} strokeWidth={(view === "percent" || view === "share") && tick === 0 ? 1.4 : 1} />
                 <text x={margin.left - 10} y={yPosition + 4} textAnchor="end" fill={chartColors.muted} fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
-                  {view === "percent" ? formatPercent(tick, 1, true) : view === "share" ? formatShare(tick, 0) : view === "btc" ? formatBtc(tick) : valueUnit === "multiple" ? formatMultiple(tick, 1) : formatUsd(tick, 0)}
+                  {view === "percent" ? formatPercent(tick, 1, true) : view === "share" ? formatShare(tick, 0) : view === "btc" ? formatBtc(tick) : valueUnit === "multiple" ? formatMultiple(tick, 1) : valueUnit === "contracts" ? formatCount(tick) : formatUsd(tick, 0)}
                 </text>
               </g>
             );
@@ -666,7 +667,7 @@ function InteractiveChart({
               <span key={item.id}>
                 <i style={{ background: item.color }} />
                 <em>{item.label}</em>
-                <b>{view === "absolute" ? (valueUnit === "multiple" ? formatMultiple(item.point.value) : formatUsd(item.point.value, 2)) : view === "btc" ? formatBtc(item.point.value, 2) : view === "share" ? formatShare(item.point.value) : formatPercent(item.point.value)}{item.point.isProjection ? "†" : item.point.isSnapshot ? "*" : ""}</b>
+                <b>{view === "absolute" ? (valueUnit === "multiple" ? formatMultiple(item.point.value) : valueUnit === "contracts" ? `${formatCount(item.point.value)} contracts` : formatUsd(item.point.value, 2)) : view === "btc" ? formatBtc(item.point.value, 2) : view === "share" ? formatShare(item.point.value) : formatPercent(item.point.value)}{item.point.isProjection ? "†" : item.point.isSnapshot ? "*" : ""}</b>
               </span>
             ))}
             {hoverProjections.map((item) => (
@@ -770,8 +771,8 @@ function MetricControls({
   return (
     <div className="control-row">
       <div className="segmented" role="group" aria-label="Metric">
-        <button type="button" className={metric === "volume" ? "active" : ""} aria-pressed={metric === "volume"} onClick={() => setMetric("volume")}>Volume</button>
-        <button type="button" className={metric === "oi" ? "active" : ""} aria-pressed={metric === "oi"} onClick={() => setMetric("oi")}>Open interest</button>
+        <button type="button" className={metric === "volume" ? "active" : ""} aria-pressed={metric === "volume"} onClick={() => setMetric("volume")}>Trading volume</button>
+        <button type="button" className={metric === "oi" ? "active" : ""} aria-pressed={metric === "oi"} onClick={() => setMetric("oi")}>Open positions (OI)</button>
       </div>
       {showView && (
         <div className="segmented" role="group" aria-label="Value display">
@@ -784,78 +785,11 @@ function MetricControls({
   );
 }
 
-function CompositionQualityTable({
-  allSeries,
-  venue,
-  dimension,
-}: {
-  allSeries: CompositionSeries[];
-  venue: CompositionVenue;
-  dimension: string;
-}) {
-  const volumeSeries = allSeries.filter((item) => item.venue === venue.label && item.dimension === dimension && item.metric === venue.qualityVolumeMetric);
-  const oiSeries = allSeries.filter((item) => item.venue === venue.label && item.dimension === dimension && item.metric === venue.qualityOiMetric);
-  const snapshotScreen = ["volume24h", "volume30d"].includes(venue.qualityVolumeMetric);
-  const volumeDates = new Set(volumeSeries.flatMap((item) => item.points.filter((point) => snapshotScreen || point.isComplete !== false).map((point) => point.date)));
-  const oiDates = new Set(oiSeries.flatMap((item) => item.points.filter((point) => snapshotScreen || point.isComplete !== false).map((point) => point.date)));
-  const date = [...volumeDates].filter((item) => oiDates.has(item)).sort().at(-1);
-  if (!date) return <div className="empty-state compact">No overlapping volume and OI observation yet for this breakdown.</div>;
-
-  const volumeByGroup = new Map(volumeSeries.map((item) => [item.group, item.points.find((point) => point.date === date)?.value ?? 0]));
-  const oiByGroup = new Map(oiSeries.map((item) => [item.group, item.points.find((point) => point.date === date)?.value ?? 0]));
-  const volumeTotal = [...volumeByGroup.values()].reduce((sum, value) => sum + value, 0);
-  const oiTotal = [...oiByGroup.values()].reduce((sum, value) => sum + value, 0);
-  const rows = [...new Set([...volumeByGroup.keys(), ...oiByGroup.keys()])].map((group) => {
-    const volume = volumeByGroup.get(group) ?? 0;
-    const oi = oiByGroup.get(group) ?? 0;
-    const volumeShare = volumeTotal > 0 ? 100 * volume / volumeTotal : 0;
-    const oiShare = oiTotal > 0 ? 100 * oi / oiTotal : 0;
-    return {
-      group,
-      volume,
-      oi,
-      volumeShare,
-      oiShare,
-      gap: volumeShare - oiShare,
-      turnover: oi > 0 ? volume / oi : null,
-    };
-  }).sort((left, right) => Math.abs(right.gap) - Math.abs(left.gap));
-
-  return (
-    <div className="quality-screen">
-      <div className="quality-screen-head">
-        <div>
-          <p className="section-kicker">VOLUME / OI DISCREPANCY SCREEN</p>
-          <h3>{snapshotScreen ? "Latest overlapping snapshot" : "Latest complete overlapping month"} · {monthLabel(date, false)}</h3>
-        </div>
-        <p>Large share gaps or turnover deserve investigation. They are not evidence of manipulation by themselves.</p>
-      </div>
-      <div className="quality-table" role="table" aria-label={`${venue.label} activity quality screen`}>
-        <div className="quality-table-row quality-table-header" role="row">
-          <span role="columnheader">Slice</span><span role="columnheader">Volume</span><span role="columnheader">Volume share</span><span role="columnheader">OI</span><span role="columnheader">OI share</span><span role="columnheader">Gap</span><span role="columnheader">Turnover</span>
-        </div>
-        {rows.map((row) => (
-          <div className="quality-table-row" role="row" key={row.group}>
-            <b role="cell">{row.group}</b>
-            <span role="cell">{formatUsd(row.volume, 2)}</span>
-            <span role="cell">{formatShare(row.volumeShare)}</span>
-            <span role="cell">{formatUsd(row.oi, 2)}</span>
-            <span role="cell">{formatShare(row.oiShare)}</span>
-            <span role="cell" className={Math.abs(row.gap) >= 10 ? "share-gap is-wide" : "share-gap"}>{row.gap > 0 ? "+" : ""}{row.gap.toFixed(1)} pp</span>
-            <span role="cell">{row.turnover == null ? "—" : formatMultiple(row.turnover)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [refreshWarning, setRefreshWarning] = useState(false);
   const [staleSnapshot, setStaleSnapshot] = useState(false);
-  const dataRequestInFlight = useRef(false);
   const [theme, setTheme] = useState<Theme>("dark");
   const [mainMetric, setMainMetric] = useState<Metric>("volume");
   const [mainView, setMainView] = useState<ViewMode>("absolute");
@@ -865,20 +799,21 @@ export default function Home() {
   const [correlationMetric, setCorrelationMetric] = useState<Metric>("volume");
   const [compositionVenueId, setCompositionVenueId] = useState("hyperliquid");
   const [compositionDimension, setCompositionDimension] = useState("assetClass");
-  const [compositionMetric, setCompositionMetric] = useState("monthlyVolume");
+  const [compositionMetric, setCompositionMetric] = useState("volume24h");
   const [compositionView, setCompositionView] = useState<ViewMode>("absolute");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("activity-atlas-theme") as Theme | null;
     const preferred = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     let disposed = false;
+    let requestInFlight = false;
     const themeTimer = window.setTimeout(() => {
       setTheme(saved === "dark" || saved === "light" ? saved : preferred);
     }, 0);
 
     async function refreshData(initial = false) {
-      if (dataRequestInFlight.current) return;
-      dataRequestInFlight.current = true;
+      if (requestInFlight) return;
+      requestInFlight = true;
       try {
         const response = await fetch(`${PUBLIC_BASE_PATH}/data/activity-data.json?refresh=${Date.now()}`, { cache: "no-store" });
         if (!response.ok) throw new Error("Data unavailable");
@@ -896,7 +831,7 @@ export default function Home() {
           else setRefreshWarning(true);
         }
       } finally {
-        dataRequestInFlight.current = false;
+        requestInFlight = false;
       }
     }
 
@@ -926,7 +861,7 @@ export default function Home() {
     if (!data) return [];
     return data.series
       .filter((series) => series.id.startsWith("category-") && series.metric === mainMetric)
-      .map((series) => ({ ...series, color: CATEGORY_COLORS[series.category], label: CATEGORY_LABELS[series.category] }));
+      .map((series) => ({ ...series, color: CATEGORY_COLORS[series.category], label: series.category === "dex" && mainMetric === "oi" ? "Hyperliquid only" : CATEGORY_LABELS[series.category] }));
   }, [data, mainMetric]);
 
   const venueSeries = useMemo<DisplaySeries[]>(() => {
@@ -995,10 +930,6 @@ export default function Home() {
   const snapshotDate = data
     ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(data.meta.generatedAt))
     : "loading";
-  const snapshotTime = data
-    ? new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris", timeZoneName: "short" }).format(new Date(data.meta.generatedAt))
-    : "";
-  const freshnessLabel = refreshWarning ? "Refresh failed · retrying" : staleSnapshot ? "Stale refresh" : "Refresh current";
   const chartCaveat = mainMetric === "volume"
     ? "CEX aggregate = Binance perpetuals + Bybit and Kraken total futures. Coinbase is separate to avoid a changing historical universe."
     : "Not universe-matched: CEX = Binance, Bybit and Kraken BTC+ETH futures; DEX = Hyperliquid only. Coinbase’s collected OI snapshots are excluded from the aggregate.";
@@ -1017,10 +948,10 @@ export default function Home() {
         </a>
         <nav aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
-          <a href="#venues">Venues</a>
-          <a href="#composition">Composition</a>
-          <a href="#correlation">Correlation</a>
-          <a href="#sources">Sources</a>
+          <a href="#breakdown">Inside a platform</a>
+          <a href="#history">History</a>
+          <a href="#correlation">Relationships</a>
+          <a href="#sources">Data &amp; sources</a>
         </nav>
         <button className="theme-toggle" type="button" onClick={switchTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
           <span aria-hidden="true">{theme === "dark" ? "☀" : "◐"}</span>
@@ -1028,26 +959,18 @@ export default function Home() {
         </button>
       </header>
 
-      <section className="hero" id="overview">
-        <div>
-          <p className="eyebrow">GLOBAL MARKET ACTIVITY · FREE PUBLIC DATA</p>
-          <h1>One timeline. Three market structures.</h1>
-          <p className="intro">Monthly volume and open-interest evolution across Binance, Bybit, Kraken and Coinbase International, leading perpetual DEXs, and Polymarket + Kalshi. Coverage differs by venue.</p>
-        </div>
-        <dl className="snapshot-facts">
-          <div><dt>Snapshot</dt><dd>{snapshotDate}<small className={refreshWarning || staleSnapshot ? "freshness stale" : "freshness"}>{freshnessLabel} · {snapshotTime}</small></dd></div>
-          <div><dt>Latest full month</dt><dd>{data ? monthLabel(`${data.meta.completeThrough}-01`, false) : "—"}</dd></div>
-          <div><dt>Perp DEX universe</dt><dd>{data ? `${data.meta.dexVenueCount} venues · top 10 shown` : "—"}</dd></div>
-        </dl>
-      </section>
-
-      {loadError && <div className="error-state">Local data snapshot failed to load. Run <code>npm run dev</code> from the project root.</div>}
+      {data && <Freshness data={data} refreshWarning={refreshWarning} staleSnapshot={staleSnapshot} />}
+      {data && <Overview data={data} />}
+      {!data && !loadError && <div className="loading-state">Loading the market overview…</div>}
+      {loadError && <div className="error-state">Could not load the dashboard data. Check your connection and reload this page.</div>}
+      {data && <Breakdown data={data} />}
+      <div className="chapter-heading" id="history"><span>GO DEEPER</span><h2>Follow the story over time.</h2><p>Choose platforms, explore the lines, and check what sits behind each number.</p></div>
 
       <section className="section-block comparison" aria-labelledby="comparison-title">
         <div className="section-head">
           <div>
-            <p className="section-kicker">CATEGORY COMPARISON</p>
-            <h2 id="comparison-title">Activity evolution</h2>
+            <p className="section-kicker">COMPARE THE GROUPS</p>
+            <h2 id="comparison-title">How activity has changed</h2>
             <p>{mainView === "percent" ? "Percentage change from each line’s first positive visible value, not absolute market size." : mainView === "btc" ? "The same activity expressed in approximate BTC equivalents." : "Reported or derived USD values; source scope remains visible."}</p>
           </div>
           <MetricControls metric={mainMetric} setMetric={setMainMetric} view={mainView} setView={setMainView} />
@@ -1141,9 +1064,9 @@ export default function Home() {
       <section className="section-block composition-section" id="composition" aria-labelledby="composition-title">
         <div className="section-head section-head-stacked">
           <div>
-            <p className="section-kicker">COMPOSITION &amp; ACTIVITY QUALITY</p>
+            <p className="section-kicker">BREAKDOWN HISTORY</p>
             <h2 id="composition-title">What the activity is made of</h2>
-            <p>Break down available volume and OI by asset class, operator/deployer, category or underlying. Classification and measurement stay separate; unknowns remain Unclassified.</p>
+            <p>Explore individual asset types, market operators, or event categories. Current snapshots and full-month history are separate measures.</p>
           </div>
           {compositionVenue && (
             <div className="composition-controls">
@@ -1157,7 +1080,7 @@ export default function Home() {
                     onClick={() => {
                       setCompositionVenueId(venue.id);
                       setCompositionDimension(venue.defaultDimension);
-                      setCompositionMetric(venue.defaultMetric);
+                      setCompositionMetric(venue.id === "hyperliquid" ? "volume24h" : venue.defaultMetric);
                       setCompositionView("absolute");
                     }}
                   >{venue.label}</button>
@@ -1183,8 +1106,8 @@ export default function Home() {
                 ))}
               </div>
               <div className="segmented" role="group" aria-label="Composition value display">
-                <button type="button" className={compositionView === "absolute" ? "active" : ""} aria-pressed={compositionView === "absolute"} onClick={() => setCompositionView("absolute")}>{compositionMetricConfig?.unit === "multiple" ? "Multiple" : "USD"}</button>
-                {compositionMetricConfig?.unit !== "multiple" && <button type="button" className={compositionView === "btc" ? "active" : ""} aria-pressed={compositionView === "btc"} onClick={() => setCompositionView("btc")}>BTC</button>}
+                <button type="button" className={compositionView === "absolute" ? "active" : ""} aria-pressed={compositionView === "absolute"} onClick={() => setCompositionView("absolute")}>{compositionMetricConfig?.unit === "multiple" ? "Multiple" : compositionMetricConfig?.unit === "contracts" ? "Contracts" : "USD"}</button>
+                {compositionMetricConfig?.unit === "usd" && <button type="button" className={compositionView === "btc" ? "active" : ""} aria-pressed={compositionView === "btc"} onClick={() => setCompositionView("btc")}>BTC</button>}
                 {compositionMetricConfig?.unit !== "multiple" && <button type="button" className={compositionView === "share" ? "active" : ""} aria-pressed={compositionView === "share"} onClick={() => setCompositionView("share")}>Share %</button>}
               </div>
             </div>
@@ -1208,7 +1131,7 @@ export default function Home() {
               view={compositionMetricConfig?.unit === "multiple" ? "absolute" : compositionView}
               metric={compositionSeries[0]?.metric ?? "snapshot"}
               valueUnit={compositionMetricConfig?.unit ?? "usd"}
-              axisLabel={compositionMetricConfig?.unit === "multiple" ? "VOLUME / OPEN INTEREST" : `${compositionMetricConfig?.label.toUpperCase() ?? "ACTIVITY"} · USD`}
+              axisLabel={compositionMetricConfig?.unit === "multiple" ? "TRADING / OPEN POSITIONS" : `${compositionMetricConfig?.label.toUpperCase() ?? "ACTIVITY"} · ${compositionMetricConfig?.unit === "contracts" ? "CONTRACTS" : "USD"}`}
               defaultStart="2023-01-01"
               completeThrough={data.meta.completeThrough}
               generatedAt={data.meta.generatedAt}
@@ -1221,13 +1144,6 @@ export default function Home() {
               <p><b>Classification</b>{compositionVenue.id === "hyperliquid" ? "Operator / deployer identifies who listed a HIP-3 market; it is not automatically the legal issuer of the referenced asset. Underlying labels are kept separately." : "Official taxonomy is used where available; deterministic mappings are disclosed, and unresolved labels stay Unclassified."}</p>
               <p><b>Current period</b>Incomplete calendar-month flows are dashed run-rate previews. OI and rolling snapshot metrics are never time-extrapolated.</p>
             </div>
-            <CompositionQualityTable
-              allSeries={data.composition.series}
-              venue={compositionVenue.id === "hyperliquid" && ["volume24h", "oiSnapshot", "turnover24h"].includes(activeCompositionMetric)
-                ? { ...compositionVenue, qualityVolumeMetric: "volume24h", qualityOiMetric: "oiSnapshot" }
-                : compositionVenue}
-              dimension={activeCompositionDimension}
-            />
             {data.composition.meta.warnings.length > 0 && (
               <details className="source-details composition-warnings">
                 <summary>Refresh and fallback notes · {data.composition.meta.warnings.length}</summary>
@@ -1244,9 +1160,9 @@ export default function Home() {
       <section className="section-block correlation-section" id="correlation" aria-labelledby="correlation-title">
         <div className="section-head">
           <div>
-            <p className="section-kicker">CO-MOVEMENT</p>
-            <h2 id="correlation-title">Correlation of monthly changes</h2>
-            <p>USD-based monthly log changes reduce common trend bias. Chart currency and range controls do not change these calculations.</p>
+            <p className="section-kicker">EXPLORE THE RELATIONSHIP</p>
+            <h2 id="correlation-title">Do these markets move together?</h2>
+            <p>Compare their month-to-month changes—not their size. A similar pattern does not show that one market causes another to move.</p>
           </div>
           <MetricControls metric={correlationMetric} setMetric={setCorrelationMetric} view="absolute" setView={() => undefined} showView={false} />
         </div>
@@ -1256,23 +1172,28 @@ export default function Home() {
               {Object.entries(correlations.pairs).map(([pair, result]) => (
                 <article key={pair} className="correlation-card">
                   <div>
-                    <p>{PAIR_LABELS[pair]}</p>
-                    <span className={(result.pearson ?? 0) < 0 ? "tone negative" : "tone"}>{correlationTone(result.pearson)}</span>
+                    <p>{correlationMetric === "oi" ? PAIR_LABELS[pair].replace("Perp DEX", "Hyperliquid") : PAIR_LABELS[pair]}</p>
                   </div>
-                  <dl>
+                  <h3 className="relationship-result">{correlationTone(result.pearson)}</h3>
+                  <div className="relationship-scale" role="img" aria-label={`Correlation ${result.pearson?.toFixed(2) ?? "unavailable"}: ${correlationTone(result.pearson)}`}>
+                    <span className="relationship-center" />
+                    {result.pearson != null && <i style={{ left: `${(result.pearson + 1) * 50}%` }} />}
+                  </div>
+                  <div className="relationship-labels"><span>Opposite</span><span>No clear pattern</span><span>Similar</span></div>
+                  <p className="relationship-period">{result.observations} monthly changes · {result.start && result.end ? `${monthLabel(result.start)} – ${monthLabel(result.end)}` : "Insufficient history"}</p>
+                  <details className="relationship-details"><summary>Show exact statistics</summary><dl>
                     <div><dt>Pearson</dt><dd>{result.pearson?.toFixed(2) ?? "—"}</dd></div>
                     <div><dt>Spearman</dt><dd>{result.spearman?.toFixed(2) ?? "—"}</dd></div>
                     <div><dt>Months</dt><dd>{result.observations}</dd></div>
-                  </dl>
-                  <small>{result.start && result.end ? `${monthLabel(result.start)} → ${monthLabel(result.end)}` : "Insufficient overlap"}</small>
+                  </dl></details>
                 </article>
               ))}
             </div>
             <div className="finding-line">
               <span>READ</span>
-              <p>Positive values indicate same-direction monthly changes; negative values indicate opposite-direction changes. Near zero means little linear association, not independence. Results describe the covered proxies, not all-market activity or causation.</p>
+              <p>{correlationMetric === "oi" ? "Open-position coverage differs: centralized exchanges include BTC + ETH futures only; the DEX comparison covers Hyperliquid only. " : "These comparisons use the covered groups, not the whole market. "}The full available overlapping history is used; the overview’s month selectors and chart sliders do not change this analysis. A value near the middle does not rule out other relationships.</p>
             </div>
-            <p className="method-line">{correlations.method} Fixed calculation window; the chart range slider does not recalculate these values.</p>
+            <details className="source-details"><summary>How this is calculated</summary><p className="method-line">{correlations.method} The marker shows Pearson correlation on a −1 to +1 scale, not a percentage or probability. Spearman provides a rank-based comparison. Descriptive labels use absolute thresholds of 0.2, 0.4 and 0.7; these are not statistical significance tests. Short histories are exploratory.</p></details>
           </>
         )}
       </section>
@@ -1295,7 +1216,7 @@ export default function Home() {
       <section className="section-block sources-section" id="sources" aria-labelledby="sources-title">
         <div className="section-head">
           <div>
-            <p className="section-kicker">COVERAGE &amp; PROVENANCE</p>
+            <p className="section-kicker">CHECK THE EVIDENCE</p>
             <h2 id="sources-title">What each line actually means</h2>
             <p>No interpolation or paid data. Missing coverage stays disclosed.</p>
           </div>
@@ -1307,6 +1228,7 @@ export default function Home() {
 
         {data && (
           <>
+            <DataHealth data={data} />
             <div className="coverage-table" role="table" aria-label="Category series coverage">
               <div className="coverage-row coverage-header" role="row">
                 <span role="columnheader">Series</span><span role="columnheader">Measure</span><span role="columnheader">Coverage</span><span role="columnheader">Quality</span><span role="columnheader">Definition</span>
@@ -1334,15 +1256,15 @@ export default function Home() {
               </div>
             </details>
 
-            <div className="warning-grid">
+            <details className="source-details"><summary>Coverage limits and source notes</summary><div className="warning-grid">
               {data.meta.warnings.map((warning) => <p key={warning}>{warning}</p>)}
-            </div>
+            </div></details>
           </>
         )}
       </section>
 
       <footer>
-        <span>Activity Atlas · local research snapshot</span>
+        <span>Activity Atlas · public data, explained</span>
         <span>Generated {snapshotDate} · current month shown as partial</span>
       </footer>
     </main>

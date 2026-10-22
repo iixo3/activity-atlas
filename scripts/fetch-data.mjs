@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { btcEquivalent, partialVolumeProjection, sumMonthlySnapshots } from "../lib/activity-math.mjs";
 import { buildCompositionData } from "./composition-data.mjs";
+import { fetchJsonWithRetry as fetchJson } from "../lib/fetch-json.mjs";
 
 const ROOT = process.cwd();
 const RAW_DIR = path.join(ROOT, "data", "raw");
@@ -287,15 +288,6 @@ function toCsv(series) {
     }
   }
   return `${rows.map((row) => row.map(csvEscape).join(",")).join("\n")}\n`;
-}
-
-async function fetchJson(url) {
-  const response = await fetch(url, {
-    headers: { "user-agent": "ActivityAtlas/1.0 research dashboard" },
-    signal: AbortSignal.timeout(60000),
-  });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`);
-  return response.json();
 }
 
 async function fetchBtcDailyCloses(start) {

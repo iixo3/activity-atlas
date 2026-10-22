@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const NORMALIZED_DIR = path.join(ROOT, "data", "normalized");
 const CACHE_FILE = path.join(NORMALIZED_DIR, "composition-cache.json");
+const OBSERVATIONS_FILE = path.join(NORMALIZED_DIR, "composition-observations.json");
 const DUNE_CLI = process.env.ACTIVITY_ATLAS_DUNE_CLI || "dune";
 const SKIP_DUNE = process.env.ACTIVITY_ATLAS_SKIP_DUNE === "1";
 const REQUEST_HEADERS = { "user-agent": "ActivityAtlas/1.0 research dashboard" };
@@ -336,7 +337,7 @@ function metricBtcKind(metric) {
 function finalizeCompositionSeries(series, btcDailyPrices) {
   const totalByKey = new Map();
   for (const item of series) {
-    if (item.unit !== "usd") continue;
+    if (item.unit === "multiple") continue;
     for (const point of item.points) {
       const key = [item.venue, item.dimension, item.metric, point.date].join("::");
       totalByKey.set(key, (totalByKey.get(key) ?? 0) + point.value);
@@ -348,10 +349,10 @@ function finalizeCompositionSeries(series, btcDailyPrices) {
     coverageEnd: item.points.at(-1)?.date ?? null,
     points: item.points.map((point) => {
       const total = totalByKey.get([item.venue, item.dimension, item.metric, point.date].join("::"));
-      const btcKind = metricBtcKind(item.metric);
+      const btcKind = item.unit === "usd" ? metricBtcKind(item.metric) : null;
       return {
         ...point,
-        share: item.unit === "usd" && total > 0 ? 100 * point.value / total : null,
+        share: item.unit !== "multiple" && total > 0 ? 100 * point.value / total : null,
         ...(btcKind ? btcEquivalent(point, btcKind, btcDailyPrices) : {}),
       };
     }),
@@ -363,8 +364,7 @@ function providerRetrievedAt(provider, fallback) {
   const points = provider?.series?.flatMap((item) => item.points ?? []) ?? [];
   const collectedAt = points.map((point) => point.collectedAt).filter(Boolean).sort().at(-1);
   if (collectedAt) return collectedAt;
-  const asOfDate = points.map((point) => point.asOfDate).filter(Boolean).sort().at(-1);
-  return asOfDate ? `${asOfDate}T23:59:59.000Z` : fallback;
+  return fallback;
 }
 
 function platformMap(points) {
@@ -774,6 +774,7 @@ function topSnapshotRecords(records, scoreKey, limit = 10) {
 
 function buildSnapshotProvider({ venue, product, records, date, categorySource, volumeMetric, volumeLabel, volumeKey, turnoverMetric, turnoverLabel, previous }) {
   const map = new Map();
+  const unit = venue === "Kalshi Predictions" ? "contracts" : "usd";
   const pointBase = { date: monthStart(date), asOfDate: date, collectedAt: new Date().toISOString(), isSnapshot: true, isComplete: false };
   const dimensions = [
     ["category", aggregateSnapshot(records, "category", volumeKey), aggregateSnapshot(records, "category", "oi")],
@@ -784,16 +785,16 @@ function buildSnapshotProvider({ venue, product, records, date, categorySource, 
     const normalizedOi = dimension === "instrument" ? volumeRows.map((row) => ({ label: row.instrument, value: row.oi })) : oiRows;
     for (const row of normalizedVolume) {
       upsertPoint(map, {
-        venue, product, dimension, group: row.label, metric: volumeMetric, metricLabel: volumeLabel, unit: "usd",
+        venue, product, dimension, group: row.label, metric: volumeMetric, metricLabel: volumeLabel, unit,
         quality: "observed", classificationSource: categorySource,
         definition: `${volumeLabel} at refresh time, grouped by ${dimension === "category" ? "category" : "market"}. This is a rolling/snapshot activity measure, not calendar-month volume.`,
       }, { ...pointBase, value: asNumber(row.value) });
     }
     for (const row of normalizedOi) {
       upsertPoint(map, {
-        venue, product, dimension, group: row.label, metric: "oiSnapshot", metricLabel: "Open-interest snapshot", unit: "usd",
+        venue, product, dimension, group: row.label, metric: "oiSnapshot", metricLabel: "Open-interest snapshot", unit,
         quality: "observed", classificationSource: categorySource,
-        definition: `Current open-interest notional grouped by ${dimension === "category" ? "category" : "market"}; monthly points are latest collected snapshots, not historical month-end reconstruction.`,
+        definition: `Current open interest in ${unit === "contracts" ? "contracts (official open_interest_fp)" : "USD notional"} grouped by ${dimension === "category" ? "category" : "market"}; monthly points are latest collected snapshots, not historical month-end reconstruction.`,
       }, { ...pointBase, value: asNumber(row.value) });
     }
   }
@@ -807,7 +808,8 @@ function buildSnapshotProvider({ venue, product, records, date, categorySource, 
     const key = [old.venue, old.dimension, old.metric, old.group].join("::");
     const next = merged.get(key);
     if (!next) {
-      merged.set(key, old);
+      const historicalPoints = old.points.filter((point) => point.date !== pointBase.date);
+      if (historicalPoints.length) merged.set(key, { ...old, points: historicalPoints });
       continue;
     }
     next.points = [...old.points.filter((point) => point.date !== pointBase.date), ...next.points].sort((left, right) => left.date.localeCompare(right.date));
@@ -831,6 +833,7 @@ function polymarketCategory(event) {
 async function fetchKalshiPerps() {
   const url = "https://external-api.kalshi.com/trade-api/v2/margin/markets";
   const payload = await fetchJson(url);
+  if (payload.cursor || payload.next_cursor) throw new Error("Kalshi perp market response is paginated; incomplete universe rejected");
   const markets = (payload.markets ?? []).filter((market) => asNumber(market.volume_notional_value_dollars) > 0 || market.status === "active");
   const startTs = Math.floor(Date.parse("2026-01-01T00:00:00Z") / 1000);
   const endTs = Math.floor(Date.now() / 1000);
@@ -841,21 +844,28 @@ async function fetchKalshiPerps() {
     return { market, candles: candles.candlesticks ?? [] };
   });
   const fulfilled = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  if (results.some((result) => result.status === "rejected")) throw new Error("One or more Kalshi perp candle feeds failed; retaining the previous complete provider snapshot");
   if (!fulfilled.length) throw new Error("No Kalshi perps candles could be retrieved");
   return { marketsWithCandles: fulfilled, failedMarkets: results.filter((result) => result.status === "rejected").length };
 }
 
-async function fetchKalshiPredictionRecords() {
+export async function fetchKalshiPredictionRecords(fetcher = fetchJson) {
   const events = [];
   let cursor = "";
+  const seen = new Set();
+  let finished = false;
   for (let page = 0; page < 100; page += 1) {
     const url = new URL("https://api.elections.kalshi.com/trade-api/v2/events");
     url.search = new URLSearchParams({ limit: "200", status: "open", with_nested_markets: "true", ...(cursor ? { cursor } : {}) });
-    const payload = await fetchJson(url);
+    const payload = await fetcher(url);
+    if (!Array.isArray(payload.events)) throw new Error("Invalid Kalshi events response");
     events.push(...(payload.events ?? []));
     cursor = payload.cursor ?? "";
-    if (!cursor) break;
+    if (!cursor) { finished = true; break; }
+    if (seen.has(cursor)) throw new Error("Kalshi event pagination repeated a cursor");
+    seen.add(cursor);
   }
+  if (!finished) throw new Error("Kalshi event pagination exceeded 100 pages; partial snapshot rejected");
   if (!events.length) throw new Error("No open Kalshi prediction events returned");
   return events.map((event) => {
     const markets = event.markets ?? [];
@@ -1079,7 +1089,36 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     warnings.push(`Polymarket composition refresh failed; cached snapshots retained (${errorDetails(error)}).`);
   }
 
+  // Correct the units of cached observations too; raw *_fp values were always
+  // contract quantities, never USD cash turnover. Do not convert them to BTC.
+  if (providers.kalshiPredictions) {
+    providers.kalshiPredictions.series = providers.kalshiPredictions.series.map((item) => item.unit === "multiple" ? item : {
+      ...item, unit: "contracts",
+      definition: `${item.metric === "oiSnapshot" ? "Outstanding contracts (open_interest_fp)" : "Contracts traded over 24 hours (volume_24h_fp)"} from Kalshi's official event feed, grouped by ${item.dimension}. These are contract counts, not dollars paid.`,
+      points: item.points.map((point) => {
+        const corrected = { ...point };
+        for (const key of ["valueBtc", "btcUsdPrice", "btcPriceDate", "btcPriceMethod"]) delete corrected[key];
+        return corrected;
+      }),
+    });
+  }
   const rawSeries = Object.values(providers).flatMap((provider) => provider?.series ?? []);
+  const archive = await readJsonIfExists(OBSERVATIONS_FILE) ?? { observations: [] };
+  const observations = new Map(archive.observations.map((row) => [`${row.id}|${row.collectedAt}`, row]));
+  for (const item of rawSeries) {
+    if (item.dimension === "instrument" || item.unit === "multiple") continue;
+    for (const point of item.points) {
+      if (!point.isSnapshot || !point.collectedAt) continue;
+      observations.set(`${item.id}|${point.collectedAt}`, {
+        id: item.id, venue: item.venue, dimension: item.dimension, group: item.group,
+        metric: item.metric, unit: item.unit, collectedAt: point.collectedAt, asOfDate: point.asOfDate, value: point.value,
+      });
+    }
+  }
+  await writeAtomic(OBSERVATIONS_FILE, `${JSON.stringify({
+    description: "Dated category/operator observations retained at each successful collection. Rolling volumes overlap and must not be summed as calendar-month volume. Uncollected periods remain missing.",
+    observations: [...observations.values()].sort((a, b) => a.collectedAt.localeCompare(b.collectedAt) || a.id.localeCompare(b.id)),
+  })}\n`);
   const series = finalizeCompositionSeries(rawSeries, btcDailyPrices);
   const venues = venueCatalog(providers);
   const cache = { generatedAt, duneRefreshedAt, hyperliquidLiveRefreshedAt, datasets, providers };
@@ -1125,7 +1164,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
         key: "kalshiPredictionComposition", publisher: "Kalshi", title: "Kalshi open event and market snapshots",
         page: "https://docs.kalshi.com/api-reference/events/get-events", api: "https://api.elections.kalshi.com/trade-api/v2/events", retrievedAt: providerRetrievedAt(providers.kalshiPredictions, generatedAt),
         reportedFrequency: "Twice-daily collection", upstreamSources: [],
-        body: "Open-event categories with nested market 24h volume and open interest. Contract volume uses the platform's $1 payout-notional convention.",
+        body: "Open-event categories with nested market 24h volume and open interest. Official volume_24h_fp and open_interest_fp are contract counts, displayed as contracts; they are not dollars paid.",
       },
       {
         key: "polymarketComposition", publisher: "Polymarket / Dune community", title: "Polymarket Gamma snapshots and weekly category history",

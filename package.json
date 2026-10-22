@@ -13,7 +13,7 @@
     "start": "node scripts/run-dashboard.mjs start:server",
     "start:server": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "refresh": "node scripts/fetch-data.mjs",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/composition-live.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/composition-live.test.mjs tests/activity-insights.test.mjs",
     "test:pages": "npm run build:pages && node --test tests/pages-export.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },

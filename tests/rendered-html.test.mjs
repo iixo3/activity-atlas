@@ -25,10 +25,10 @@ test("server-renders Activity Atlas", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
   assert.match(html, /Activity Atlas/);
-  assert.match(html, /One timeline\. Three market structures\./);
-  assert.match(html, /Category comparison/i);
+  assert.match(html, /Follow the story over time/);
+  assert.match(html, /How activity has changed/i);
   assert.match(html, /CEX \/ Hyperliquid/);
-  assert.match(html, /Composition &amp; Activity Quality/i);
+  assert.match(html, /BREAKDOWN HISTORY/i);
   assert.match(html, /What the activity is made of/i);
   assert.match(html, />% change<\/button>/);
   assert.doesNotMatch(html, /Indexed|index-cue/);

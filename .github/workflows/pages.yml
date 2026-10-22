@@ -7,6 +7,8 @@ on:
   schedule:
     - cron: "0 8,16 * * *"
       timezone: "Europe/Paris"
+    # Lightweight catch-up check if GitHub delays or drops a scheduled run.
+    - cron: "37 * * * *"
 
 permissions:
   contents: write
@@ -18,8 +20,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  check-refresh:
     runs-on: ubuntu-latest
+    outputs:
+      due: ${{ steps.check.outputs.due }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
+      - id: check
+        run: node scripts/check-refresh-due.mjs
+
+  build:
+    needs: check-refresh
+    if: needs.check-refresh.outputs.due == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +50,9 @@ jobs:
         env:
           ACTIVITY_ATLAS_SKIP_DUNE: "1"
         run: npm run refresh
+      - name: Report observation dates and retained feeds
+        if: always()
+        run: node scripts/report-data-health.mjs
       - run: npm run lint
       - run: npm test
       - name: Build static Pages export
@@ -48,6 +67,7 @@ jobs:
           git add data/normalized/coinbase-oi-history.json
           git add data/normalized/partial-volume-history.json
           git add data/normalized/composition-cache.json
+          git add data/normalized/composition-observations.json
           if ! git diff --cached --quiet; then
             git commit -m "data: refresh activity snapshot [skip ci]"
             git push origin HEAD:main
