@@ -772,7 +772,7 @@ function MetricControls({
     <div className="control-row">
       <div className="segmented" role="group" aria-label="Metric">
         <button type="button" className={metric === "volume" ? "active" : ""} aria-pressed={metric === "volume"} onClick={() => setMetric("volume")}>Trading volume</button>
-        <button type="button" className={metric === "oi" ? "active" : ""} aria-pressed={metric === "oi"} onClick={() => setMetric("oi")}>Open positions (OI)</button>
+        <button type="button" className={metric === "oi" ? "active" : ""} aria-pressed={metric === "oi"} onClick={() => setMetric("oi")}>Open interest (OI)</button>
       </div>
       {showView && (
         <div className="segmented" role="group" aria-label="Value display">

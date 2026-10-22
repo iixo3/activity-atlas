@@ -704,3 +704,108 @@ main { max-width: 1540px; margin: auto; }
   .health-grid article { padding: 17px 19px; }
   .health-grid b { font-size: 11px; }
 }
+
+/* Market bulletin: stronger identity, connected facts, readable controls. */
+:root { --bulletin: #c4ff46; --bulletin-ink: #142000; --accent: #386600; }
+:root[data-theme="dark"] { --accent: #c4ff46; }
+.topbar { border-bottom: 2px solid var(--line-strong); column-gap: 24px; }
+.topbar nav { gap: 20px; }
+.topbar nav a { font-size: 15px; font-weight: 600; }
+.theme-toggle { font-size: 14px; min-height: 42px; }
+.freshness-strip { font-size: 13px; }
+.overview-toolbar .eyebrow { background: var(--bulletin); color: var(--bulletin-ink); border: 1px solid var(--bulletin-ink); padding: 10px 12px; font-size: 12px; letter-spacing: .06em; transform: rotate(-1deg); }
+.segmented button { font-size: 14px; min-height: 40px; padding: 9px 13px; }
+.overview-toolbar .segmented { border-radius: 4px; border-color: var(--line-strong); }
+.overview-toolbar .segmented button { border-radius: 2px; }
+.overview-toolbar .segmented button.active { background: var(--bulletin); color: var(--bulletin-ink); font-weight: 700; }
+.story-heading { padding: 24px 0 18px; }
+.story-heading > p.overview-question { margin: 0 0 10px; color: var(--text); font-size: 17px; font-weight: 600; }
+.story-heading h1 { max-width: 1100px; font-size: clamp(27px, 3.1vw, 42px); letter-spacing: -.035em; line-height: 1.18; font-weight: 700; text-wrap: pretty; }
+.headline-date { color: var(--accent); }
+.story-heading > p { margin: 12px 0 0; font-size: 15px; max-width: 920px; }
+.comparison-period { margin: 0; gap: 10px; font-size: 15px; color: var(--text); }
+.month-chip select { min-height: 44px; border: 2px solid var(--line-strong); border-radius: 5px; padding: 9px 28px 9px 12px; font-size: 15px; font-weight: 650; cursor: pointer; }
+.comparison-period .text-button { font-size: 14px; margin-left: 6px; }
+.overview-definition { font-size: 14px; color: var(--muted); margin: 16px 0 18px; line-height: 1.6; }
+.overview-definition b { color: var(--text); }
+.comparison-timeline { margin-top: 14px; padding: 12px 16px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; }
+.comparison-timeline summary { font-size: 14px; cursor: pointer; color: var(--text); }
+.comparison-timeline > p { font-size: 13px; color: var(--muted); margin: 12px 0; line-height: 1.5; }
+.month-timeline { position: relative; height: 46px; margin: 0 12px; }
+.month-timeline-track { position: absolute; top: 17px; left: 0; right: 0; height: 12px; border: 1px solid var(--line-strong); background: repeating-linear-gradient(90deg, var(--panel-subtle) 0, var(--panel-subtle) calc(100% / 44 - 1px), var(--line-strong) calc(100% / 44 - 1px), var(--line-strong) calc(100% / 44)); }
+.month-timeline-track > i { position: absolute; left: var(--range-start); right: calc(100% - var(--range-end)); top: 0; bottom: 0; background: var(--bulletin); opacity: .8; }
+.month-timeline input { position: absolute; inset: 0; width: 100%; margin: 0; appearance: none; background: transparent; pointer-events: none; }
+.month-timeline input::-webkit-slider-runnable-track { background: transparent; height: 42px; }
+.month-timeline input::-webkit-slider-thumb { appearance: none; width: 18px; height: 38px; margin-top: 2px; border: 2px solid var(--text); border-radius: 3px; background: var(--bulletin); pointer-events: auto; cursor: ew-resize; }
+.month-timeline input::-moz-range-track { background: transparent; }
+.month-timeline input::-moz-range-thumb { width: 16px; height: 36px; border: 2px solid var(--text); border-radius: 3px; background: var(--bulletin); pointer-events: auto; cursor: ew-resize; }
+.month-timeline-labels { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.month-timeline-labels b { color: var(--text); font-weight: 550; }
+.recap-grid { gap: 16px; }
+.recap-card { padding: 20px 20px 0; border: 2px solid var(--line-strong); border-top: 5px solid var(--category-color); border-radius: 5px; box-shadow: 4px 4px 0 color-mix(in srgb, var(--category-color) 30%, transparent); }
+.recap-title h2 { font-size: 18px; }
+.recap-number { display: inline; font-size: 13px; }
+.recap-scope { font-size: 13px; min-height: 40px; margin: 9px 0 15px; }
+.recap-total { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.recap-value { margin: 0; font-size: clamp(29px, 2.8vw, 38px); font-weight: 650; letter-spacing: -.035em; }
+.measure-caption { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.recap-change { margin: 14px 0; gap: 8px; }
+.recap-change b { font-size: 23px; }
+.recap-change span, .change-axis { font-size: 13px; }
+.secondary-metric { margin: 0 -20px; padding: 14px 20px; border-radius: 0; }
+.secondary-metric span { font-size: 13px; max-width: 210px; }
+.secondary-metric b { font-size: 17px; }
+.overview-footnote { font-size: 13px; }
+.relative-panel { border: 2px solid var(--line-strong); border-radius: 5px; gap: 32px; padding: 26px; }
+.relative-copy h2 { font-size: 29px; margin-bottom: 16px; }
+.section-kicker { font-size: 12px; letter-spacing: .07em; }
+.pair-selectors label, .breakdown-controls label { font-size: 14px; }
+.pair-selectors select { font-size: 14px; min-height: 44px; }
+.relative-copy > p:not(.section-kicker) { font-size: 15px; margin-top: 16px; }
+.relative-answer { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
+.relative-value { font-size: 42px; }
+.relative-answer > span { font-size: 14px; line-height: 1.5; color: var(--muted); }
+.relative-copy > p.relative-before, .reference-bar-label { font-size: 14px; }
+.section-block { border-radius: 6px; border-color: var(--line-strong); }
+.section-head h2 { font-size: clamp(25px, 2.5vw, 32px); }
+.breakdown-controls select { font-size: 14px; min-height: 44px; }
+.share-key, .breakdown-dates { font-size: 14px; }
+.paired-bars em, .gap-description { font-size: 13px; }
+.breakdown-reading p { font-size: 23px; }
+.chapter-heading h2 { font-size: 36px; }
+@media (max-width: 1100px) {
+  .topbar { grid-template-columns: 1fr auto; height: auto; min-height: 72px; padding-top: 12px; }
+  .topbar nav { grid-column: 1 / -1; grid-row: 2; display: flex; overflow-x: auto; min-width: 0; gap: 22px; padding: 12px 0; }
+  .topbar nav a { font-size: 14px; white-space: nowrap; }
+}
+@media (max-width: 760px) {
+  .brand { font-size: 18px; }
+  .theme-toggle { font-size: 13px; }
+  .freshness-strip { font-size: 12px; gap: 8px 10px; }
+  .overview-toolbar .eyebrow { font-size: 11px; }
+  .overview-toolbar .segmented button, .segmented button { font-size: 14px; }
+  .story-heading h1 { font-size: 29px; }
+  .story-heading > p, .story-heading > p.overview-question { font-size: 15px; }
+  .comparison-period { gap: 8px; font-size: 14px; }
+  .comparison-period select { font-size: 14px; padding: 9px 22px 9px 9px; }
+  .comparison-period .text-button { font-size: 13px; margin-left: 0; }
+  .month-timeline-labels { font-size: 11px; flex-wrap: wrap; }
+  .month-timeline-labels b { order: -1; width: 100%; text-align: center; font-size: 13px; }
+  .month-timeline { height: 94px; margin-left: 48px; }
+  .month-timeline::before, .month-timeline::after { position: absolute; left: -46px; font-size: 12px; color: var(--muted); }
+  .month-timeline::before { content: "From"; top: 14px; }
+  .month-timeline::after { content: "To"; top: 62px; }
+  .month-timeline-track { box-shadow: 0 48px 0 var(--panel-subtle); }
+  .month-timeline-track > i { box-shadow: 0 48px 0 var(--bulletin); }
+  .month-timeline input:first-of-type { top: 0; bottom: auto; height: 44px; }
+  .month-timeline input:last-of-type { top: 48px; bottom: auto; height: 44px; }
+  .recap-card { display: block; padding: 18px 18px 0; }
+  .recap-title h2 { font-size: 18px; }
+  .recap-scope { min-height: 0; margin-bottom: 14px; font-size: 13px; }
+  .recap-value { font-size: 34px; }
+  .recap-change { flex-direction: row; align-items: baseline; justify-content: flex-start; margin: 12px 0 15px; }
+  .secondary-metric { margin: 0 -18px; padding: 12px 18px; }
+  .relative-panel { padding: 21px 18px; }
+  .relative-value { font-size: 38px; }
+  .chapter-heading h2 { font-size: 30px; }
+}
