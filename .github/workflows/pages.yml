@@ -1,0 +1,88 @@
+name: Refresh and deploy Activity Atlas
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7,15 * * *"
+    # Lightweight catch-up check if GitHub delays or drops a scheduled run.
+    - cron: "37 * * * *"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: activity-atlas-pages
+  cancel-in-progress: false
+
+jobs:
+  check-refresh:
+    runs-on: ubuntu-latest
+    outputs:
+      due: ${{ steps.check.outputs.due }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
+      - id: check
+        run: node scripts/check-refresh-due.mjs
+
+  build:
+    needs: check-refresh
+    if: needs.check-refresh.outputs.due == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Refresh public data
+        env:
+          ACTIVITY_ATLAS_SKIP_DUNE: "1"
+        run: npm run refresh
+      - name: Report observation dates and retained feeds
+        if: always()
+        run: node scripts/report-data-health.mjs
+      - run: npm run lint
+      - run: npm test
+      - name: Build static Pages export
+        env:
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+        run: npm run test:pages
+      - name: Persist collected snapshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/activity-data.json public/data/activity-series.csv
+          git add data/normalized/coinbase-oi-history.json
+          git add data/normalized/partial-volume-history.json
+          git add data/normalized/composition-cache.json
+          git add data/normalized/composition-observations.json
+          if ! git diff --cached --quiet; then
+            git commit -m "data: refresh activity snapshot [skip ci]"
+            git push origin HEAD:main
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/pages
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,72 @@
+{
+  "description": "Coinbase International all-PERP OI snapshots collected by Activity Atlas; USD/USDC notional at retrieval time.",
+  "collectionStartedAt": "2026-09-03T14:45:41.278Z",
+  "snapshots": [
+    {
+      "retrievedAt": "2026-09-03T14:45:41.278Z",
+      "asOfDate": "2026-09-03",
+      "value": 238483004.33734038,
+      "instrumentCount": null
+    },
+    {
+      "retrievedAt": "2026-09-09T14:02:07.478Z",
+      "asOfDate": "2026-09-09",
+      "value": 248395316.64561605,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-09T14:06:00.221Z",
+      "asOfDate": "2026-09-09",
+      "value": 248794137.25201645,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-09T14:12:42.586Z",
+      "asOfDate": "2026-09-09",
+      "value": 247692193.1878237,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-14T10:20:26.569Z",
+      "asOfDate": "2026-09-14",
+      "value": 262346426.69324479,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-14T14:00:00.367Z",
+      "asOfDate": "2026-09-14",
+      "value": 256971493.30490324,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-14T14:37:23.113Z",
+      "asOfDate": "2026-09-14",
+      "value": 256788384.30472177,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-23T14:27:14.176Z",
+      "asOfDate": "2026-09-23",
+      "value": 211289081.96944818,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-09-23T14:34:26.331Z",
+      "asOfDate": "2026-09-23",
+      "value": 211668125.5194044,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-10-15T10:27:12.934Z",
+      "asOfDate": "2026-10-15",
+      "value": 181894818.37408087,
+      "instrumentCount": 264
+    },
+    {
+      "retrievedAt": "2026-10-15T10:36:02.066Z",
+      "asOfDate": "2026-10-15",
+      "value": 181894818.37408087,
+      "instrumentCount": 264
+    }
+  ]
+}
