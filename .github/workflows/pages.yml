@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
-      publish: ${{ steps.checks.outcome == 'success' }}
+      publish: ${{ steps.pages.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,19 +58,25 @@ jobs:
         continue-on-error: true
         run: node scripts/report-data-health.mjs
       # A failed refresh or check keeps the last good site online until a later run passes.
-      - name: Check and build the site
-        id: checks
+      # The final step below then marks the run failed and names the stage.
+      - name: Lint
+        id: lint
         if: steps.refresh.outcome == 'success'
         continue-on-error: true
-        run: |
-          npm run lint
-          npm test
-          NEXT_PUBLIC_BASE_PATH=/${{ github.event.repository.name }} npm run test:pages
-      - name: Note that the site was left unchanged
-        if: steps.checks.outcome != 'success'
-        run: echo "::warning::Refresh or checks did not pass, so the last good site stays online."
+        run: npm run lint
+      - name: Test
+        id: test
+        if: steps.lint.outcome == 'success'
+        continue-on-error: true
+        run: npm test
+      - name: Build and test the Pages export
+        id: pages
+        if: steps.test.outcome == 'success'
+        continue-on-error: true
+        run: NEXT_PUBLIC_BASE_PATH=/${{ github.event.repository.name }} npm run test:pages
       - name: Persist collected snapshots
-        if: steps.checks.outcome == 'success'
+        id: persist
+        if: steps.pages.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -84,11 +90,22 @@ jobs:
             git push origin HEAD:main
           fi
       - uses: actions/configure-pages@v5
-        if: steps.checks.outcome == 'success'
+        if: steps.pages.outcome == 'success'
       - uses: actions/upload-pages-artifact@v4
-        if: steps.checks.outcome == 'success'
+        id: artifact
+        if: steps.pages.outcome == 'success'
         with:
           path: dist/pages
+      - name: Mark the run failed if a stage did not pass
+        if: always()
+        env:
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+          PAGES_OUTCOME: ${{ steps.pages.outcome }}
+          PERSIST_OUTCOME: ${{ steps.persist.outcome }}
+          ARTIFACT_OUTCOME: ${{ steps.artifact.outcome }}
+        run: node scripts/report-workflow-result.mjs
 
   deploy:
     environment:

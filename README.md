@@ -15,11 +15,13 @@ The default window starts in January 2023. Prediction-market drilldowns retain e
 
 The opening compares category totals and growth between two matching complete months. It never uses the partial-month estimate for its headline. The relative-size graphic shows one group's reported dollars per $100 of the reference group; it is not global market share or evidence of money moving between groups.
 
-The platform breakdown opens on current Hyperliquid observations. Paired bars compare trading share with open-position share, with the measurement periods visible. Historical complete-month breakdowns remain selectable. Kalshi prediction breakdowns use contract counts, not dollars paid. Line charts and correlation statistics remain available further down the page.
+The platform breakdown opens on current Hyperliquid observations. Paired bars compare trading share with open-interest share, with the collection date and volume window visible. Each platform offers **Collected snapshot**, **Full calendar month**, or both; a snapshot is not a monthly total. Changing Platform or Group by keeps the chosen month and view, and an unsupported month stays selected with an explanation. Kalshi prediction breakdowns use contract counts, not dollars paid. Line charts and correlation statistics remain available further down the page.
 
-Source freshness is evaluated from observation dates, independently of the file's refresh timestamp. Unknown publication cutoffs remain unknown; older Hyperliquid composition and Coinbase OI are explicitly flagged. Temporary core fetch failures retry up to three times. Incomplete Kalshi pagination or failed perp market feeds cannot replace a complete cached breakdown. GitHub runs include a source-health report.
+Correlation follows the overview's metric and period, using only adjacent complete months inside that period. It compares monthly changes, not size. Below six changes the coefficient is withheld, so the default two-month period shows none until you extend it.
 
-`data/normalized/composition-observations.json` retains dated category/operator observations at each successful collection. Rolling 24h/30d volumes overlap and must not be summed into monthly totals. Missing historical observations are not reconstructed.
+Source freshness is evaluated from observation dates, independently of the file's refresh timestamp. Each feed lists its last check, verified observation cutoff and latest complete month separately. Unknown publication cutoffs remain unknown; older Hyperliquid composition and Coinbase feeds are explicitly flagged with dates and reasons. Temporary core fetch failures retry up to three times. Incomplete Kalshi pagination or failed perp market feeds cannot replace a complete cached breakdown. GitHub runs include a source-health report.
+
+`data/normalized/composition-observations.json` retains dated category, operator and individual-market observations at each successful collection. Rolling 24h/30d volumes overlap and must not be summed into monthly totals. Missing historical observations are not reconstructed.
 
 ## Run locally
 
@@ -53,9 +55,9 @@ npm run test:pages
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml` refreshes, verifies, and deploys the static dashboard on every `main` push, on manual dispatch, and at 07:00/15:00 UTC. An hourly lightweight check retries an overdue refresh window and skips full work when that window already completed. Successful runs commit compact continuity files so Coinbase OI and incomplete-month observations accumulate across runs. Raw provider responses stay local and out of Git.
+`.github/workflows/pages.yml` refreshes, verifies, and deploys the static dashboard on every `main` push, on manual dispatch, and at 07:00/15:00 UTC. An hourly lightweight check retries an overdue refresh window and skips full work when that window already completed. Successful runs commit compact continuity files so Coinbase OI and incomplete-month observations accumulate across runs. Raw provider responses stay local and out of Git. A failed refresh, lint, test or Pages build leaves the last good site online and then marks the run failed, naming the stage.
 
-Hosted refreshes retain the last valid snapshot when an optional provider fails. Dune-derived Hyperliquid/Polymarket composition history currently remains cached because the connected free Dune account has no query credits. Current Hyperliquid composition refreshes separately from its official API; core category and venue activity continues refreshing from public sources. Source timestamps expose this difference.
+Hosted refreshes retain the last valid snapshot when an optional provider fails. Dune-derived Hyperliquid/Polymarket composition history currently remains cached because free Dune access cannot run queries. Current Hyperliquid composition refreshes separately from its official API; core category and venue activity continues refreshing from public sources. Source timestamps expose this difference.
 
 ## Refresh the public snapshot
 
@@ -81,13 +83,14 @@ Publication is atomic and guarded against overlapping refreshes. The public JSON
 - CEX OI is Binance + Bybit + Kraken BTC and ETH futures, not all-pair perpetual OI.
 - Coinbase International volume sums only reported `-PERP` contracts; spot, US futures and Deribit are excluded. Coverage starts June 21, 2023; the first month is incomplete. OI is collected from dated official snapshots going forward, with no fabricated pre-collection history. USDC OI is treated as USD at 1:1.
 - Current-month volume is a dashed full-calendar-month run-rate estimate. Tooltips and downloads retain the observed MTD value, coverage date, day count, and multiplier. A zero current bucket from a normally active source is omitted rather than treated as a real collapse. Current-month OI is the actual latest snapshot and is never extrapolated.
-- Category totals use a fixed Binance + Bybit + Kraken universe. Coinbase remains in the venue charts, outside category totals/correlations, to avoid a changing historical universe.
+- Category totals use a fixed Binance + Bybit + Kraken universe, in both volume and OI. Coinbase remains in the venue charts, outside category totals/correlations, to avoid a changing historical universe; the opening recap says so.
 - BTC values divide USD flows by the month's mean completed daily BTC/USD closes and OI by the last completed close on or before its observation date. This is approximate equivalent value, not actual BTC traded. Correlations stay USD-based.
 - Global perp-DEX volume covers every protocol label currently present in the public vendor series. Historical perp-DEX OI covers Hyperliquid only.
 - The DEX top 10 includes raw current-month-to-date volume so new venues that affect the category total are not hidden. It never uses the projected run rate and remains provisional until month-end.
 - Prediction-market USD histories use The Block's taker-notional and OI series. Kalshi begins July 2024; Polymarket US begins October 2025.
 - Composition history is not uniform: Hyperliquid OI is granular from June 2023, granular Hyperliquid volume from October 2025, Kalshi Perps from product launch, and prediction-category OI is collected forward. The dashboard shows exact coverage and source quality.
 - Volume/OI turnover and share gaps are screening signals only. They do not prove wash trading, manipulation, or inflated activity.
-- Correlations use monthly log changes over the common complete-month window. They describe co-movement, not causation.
+- Correlations use monthly log changes between adjacent complete months inside the overview's selected period. They describe co-movement, not causation or size.
+- Hyperliquid's vendor OI total and official snapshot sum are different sources and differ materially (about 2.00 times on 31 October 2026). This is unresolved and disclosed; neither is adjusted.
 
 Full definitions, source mapping, and formulas: [docs/methodology.md](docs/methodology.md).

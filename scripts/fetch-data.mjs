@@ -1,7 +1,8 @@
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { btcEquivalent, partialVolumeProjection, sumMonthlySnapshots } from "../lib/activity-math.mjs";
+import { btcEquivalent, monthlyFlowPoints, partialVolumeProjection, sumMonthlyFlows, sumMonthlySnapshots } from "../lib/activity-math.mjs";
+import { pairCorrelation } from "../lib/activity-insights.mjs";
 import { buildCompositionData } from "./composition-data.mjs";
 import { fetchJsonWithRetry as fetchJson, fetchOptionalJson } from "../lib/fetch-json.mjs";
 
@@ -165,6 +166,22 @@ function monthlyVolume(daily) {
   });
 }
 
+/** Describe how the Coinbase daily feed ends, without altering any value. Zero
+ * rows after the last active day are not observations, and an unchanged trailing
+ * run is reported rather than presented as ordinary activity. */
+function coinbaseVolumeDiagnostics(daily) {
+  const lastRow = daily.at(-1)?.date;
+  const activeIndex = daily.findLastIndex((row) => row.value > 0);
+  if (!lastRow || activeIndex < 0) return null;
+  const last = daily[activeIndex];
+  const notes = [];
+  if (lastRow !== last.date) notes.push(`Source rows run through ${lastRow}, but the last nonzero day is ${last.date}.`);
+  let runStart = activeIndex;
+  while (runStart > 0 && Math.abs(daily[runStart - 1].value - last.value) <= last.value * 0.01) runStart -= 1;
+  if (activeIndex - runStart >= 2) notes.push(`Daily totals stay near ${Math.round(last.value).toLocaleString("en-US")} USD from ${daily[runStart].date} to ${last.date}; this flat run is not verified as ordinary trading.`);
+  return notes.join(" ") || null;
+}
+
 function previousMonthKey(now = new Date()) {
   const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
   return previous.toISOString().slice(0, 7);
@@ -174,78 +191,6 @@ function cumulative(values, throughMonth = null) {
   return values
     .filter((row) => !throughMonth || monthKey(row.date) <= throughMonth)
     .reduce((sum, row) => sum + row.value, 0);
-}
-
-function adjacentMonth(previous, current) {
-  const [prevYear, prevMonth] = previous.split("-").map(Number);
-  const [year, month] = current.split("-").map(Number);
-  return year * 12 + month - (prevYear * 12 + prevMonth) === 1;
-}
-
-function logChanges(values, { start, completeThrough }) {
-  const monthly = new Map(values.map((row) => [monthKey(row.date), row.value]));
-  const months = [...monthly.keys()]
-    .filter((month) => month >= start && month <= completeThrough)
-    .sort();
-  const result = [];
-  for (let index = 1; index < months.length; index += 1) {
-    const previousMonth = months[index - 1];
-    const currentMonth = months[index];
-    const previous = monthly.get(previousMonth);
-    const current = monthly.get(currentMonth);
-    if (!adjacentMonth(previousMonth, currentMonth) || previous <= 0 || current <= 0) continue;
-    result.push({ date: `${currentMonth}-01`, value: Math.log(current / previous) });
-  }
-  return result;
-}
-
-function pearson(left, right) {
-  if (left.length !== right.length || left.length < 3) return null;
-  const leftMean = left.reduce((sum, value) => sum + value, 0) / left.length;
-  const rightMean = right.reduce((sum, value) => sum + value, 0) / right.length;
-  let numerator = 0;
-  let leftSquares = 0;
-  let rightSquares = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    const leftDelta = left[index] - leftMean;
-    const rightDelta = right[index] - rightMean;
-    numerator += leftDelta * rightDelta;
-    leftSquares += leftDelta ** 2;
-    rightSquares += rightDelta ** 2;
-  }
-  const denominator = Math.sqrt(leftSquares * rightSquares);
-  return denominator === 0 ? null : numerator / denominator;
-}
-
-function ranks(values) {
-  const sorted = values
-    .map((value, index) => ({ value, index }))
-    .sort((a, b) => a.value - b.value);
-  const result = Array(values.length);
-  let cursor = 0;
-  while (cursor < sorted.length) {
-    let end = cursor + 1;
-    while (end < sorted.length && sorted[end].value === sorted[cursor].value) end += 1;
-    const rank = (cursor + 1 + end) / 2;
-    for (let index = cursor; index < end; index += 1) result[sorted[index].index] = rank;
-    cursor = end;
-  }
-  return result;
-}
-
-function pairCorrelation(left, right, options) {
-  const leftChanges = new Map(logChanges(left, options).map((row) => [row.date, row.value]));
-  const rightChanges = new Map(logChanges(right, options).map((row) => [row.date, row.value]));
-  const dates = [...leftChanges.keys()].filter((date) => rightChanges.has(date)).sort();
-  const leftValues = dates.map((date) => leftChanges.get(date));
-  const rightValues = dates.map((date) => rightChanges.get(date));
-  return {
-    pearson: pearson(leftValues, rightValues),
-    spearman: pearson(ranks(leftValues), ranks(rightValues)),
-    observations: dates.length,
-    start: dates[0] ?? null,
-    end: dates.at(-1) ?? null,
-  };
 }
 
 function csvEscape(value) {
@@ -347,15 +292,16 @@ const hyperliquidOiSeries = chartSeries(fetched.hyperliquidOi);
 const predictionVolumeSeries = chartSeries(fetched.predictionVolume);
 const predictionOiSeries = chartSeries(fetched.predictionOi);
 
-const binanceVolume = filterFrom(points(binancePerpSeries["Binance Volume"]));
-const bybitVolume = filterFrom(points(cexVolumeSeries.ByBit));
-const krakenVolume = filterFrom(points(cexVolumeSeries.Kraken));
-const cexVolume = sumAligned([binanceVolume, bybitVolume, krakenVolume], { requireAll: true });
+const binanceVolume = filterFrom(monthlyFlowPoints(points(binancePerpSeries["Binance Volume"])));
+const bybitVolume = filterFrom(monthlyFlowPoints(points(cexVolumeSeries.ByBit)));
+const krakenVolume = filterFrom(monthlyFlowPoints(points(cexVolumeSeries.Kraken)));
+const cexVolume = sumMonthlyFlows([binanceVolume, bybitVolume, krakenVolume], { requireAll: true });
 const coinbasePerpEntries = Object.entries(chartSeries(fetched.coinbaseVolume)).filter(([symbol]) => symbol.endsWith("-PERP"));
 if (!coinbasePerpEntries.length) throw new Error("No Coinbase PERP series found");
 const coinbaseDaily = sumAligned(coinbasePerpEntries.map(([, series]) => points(series))).filter((row) => row.date < today);
 const lastCoinbaseActivity = coinbaseDaily.findLast((row) => row.value > 0)?.date;
 const coinbaseVolume = monthlyVolume(coinbaseDaily.filter((row) => row.date <= lastCoinbaseActivity));
+const coinbaseVolumeNote = coinbaseVolumeDiagnostics(coinbaseDaily);
 const coinbasePerps = coinbaseInstruments.filter((instrument) => instrument.type === "PERP");
 const coinbaseOiValue = coinbasePerps.reduce((sum, instrument) => {
   const quantity = Number(instrument.open_interest);
@@ -435,7 +381,7 @@ const cexOi = toMonthStart(endOfMonth(filterFrom(sumAligned([binanceOiDaily, byb
 
 const dexVenueEntries = Object.entries(dexVolumeSeries).map(([name, series]) => ({
   name,
-  points: filterFrom(points(series)),
+  points: filterFrom(monthlyFlowPoints(points(series))),
 }));
 const dexRanking = dexVenueEntries
   .map((entry) => ({
@@ -451,14 +397,15 @@ const dexRanking = dexVenueEntries
   }))
   .sort((left, right) => right.cumulativeVolume - left.cumulativeVolume);
 const dexTopTen = dexRanking.slice(0, 10).map((entry) => entry.name);
-const dexVolume = sumAligned(dexVenueEntries.map((entry) => entry.points));
+const dexVolume = sumMonthlyFlows(dexVenueEntries.map((entry) => entry.points));
 const dexOi = toMonthStart(endOfMonth(filterFrom(points(hyperliquidOiSeries.Total))));
 
-const polymarketVolumeRaw = points(predictionVolumeSeries.Polymarket);
-const polymarketUsVolumeRaw = points(predictionVolumeSeries["Polymarket US"]);
-const kalshiVolumeRaw = points(predictionVolumeSeries.Kalshi);
+// The vendor's "monthly" prediction chart can return daily rows; see monthlyFlowPoints.
+const polymarketVolumeRaw = monthlyFlowPoints(points(predictionVolumeSeries.Polymarket));
+const polymarketUsVolumeRaw = monthlyFlowPoints(points(predictionVolumeSeries["Polymarket US"]));
+const kalshiVolumeRaw = monthlyFlowPoints(points(predictionVolumeSeries.Kalshi));
 const predictionVolume = filterFrom(
-  sumAligned([polymarketVolumeRaw, polymarketUsVolumeRaw, kalshiVolumeRaw]),
+  sumMonthlyFlows([polymarketVolumeRaw, polymarketUsVolumeRaw, kalshiVolumeRaw]),
 );
 const polymarketVolume = trimLeadingZeros(polymarketVolumeRaw);
 const polymarketUsVolume = trimLeadingZeros(polymarketUsVolumeRaw);
@@ -484,7 +431,9 @@ const sourceCatalog = Object.entries(SOURCE_DEFS).map(([key, source]) => {
     page: source.page,
     api: source.api,
     retrievedAt: generatedAt,
-    reportedFrequency: key === "dexVolume" ? "Monthly points (vendor metadata: Daily)" : chart.jsonFile.Frequency,
+    // The vendor's own stamp for this chart file. It is not an observation cutoff.
+    sourceUpdatedAt: Number.isFinite(chart.jsonFile.UpdatedAt) ? new Date(chart.jsonFile.UpdatedAt * 1000).toISOString() : null,
+    reportedFrequency: key === "dexVolume" || (key === "predictionVolume" && chart.jsonFile.Frequency === "Daily") ? `Monthly points (vendor metadata: ${chart.jsonFile.Frequency})` : chart.jsonFile.Frequency,
     upstreamSources: (chart.customFields?.data_sources ?? []).map((item) => item["source-text"]),
     body: chart.body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").replace("Open Interesting", "Open Interest").trim(),
   };
@@ -492,7 +441,7 @@ const sourceCatalog = Object.entries(SOURCE_DEFS).map(([key, source]) => {
 sourceCatalog.push({
   key: "coinbaseOi", publisher: "Coinbase", title: "Coinbase International perpetual instruments · collected OI snapshots",
   page: "https://docs.cdp.coinbase.com/api-reference/international-exchange-api/rest-api/instruments/list-instruments",
-  api: coinbaseOiApi, retrievedAt: latestCoinbaseOiSnapshot.retrievedAt, reportedFrequency: "Twice-daily collection while the local runner is active", upstreamSources: [],
+  api: coinbaseOiApi, retrievedAt: latestCoinbaseOiSnapshot.retrievedAt, reportedFrequency: "Twice-daily automatic collection", upstreamSources: [],
   body: `PERP instruments only; sum base open_interest × mark_price. USDC treated as USD at 1:1. Collection began ${coinbaseOiCollectionStartedAt}; no pre-collection history inferred. ${coinbaseOiFallbackNote}`,
 }, {
   key: "btcUsdDaily", publisher: "Coinbase", title: "BTC/USD completed daily closing prices",
@@ -837,6 +786,15 @@ const output = {
     generatedAt,
     requestedDefaultStart: "2023-01-01",
     completeThrough,
+    // Only feeds that can diverge from this run's file timestamp need an entry.
+    feedStatus: {
+      "cex-coinbase-oi": {
+        checkedAt: generatedAt,
+        retrievedAt: latestCoinbaseOiSnapshot.retrievedAt,
+        failure: coinbaseOiSnapshotAccepted ? null : coinbaseRequestFailure ?? "no priced open perpetual contract was returned",
+      },
+      "cex-coinbase-volume": { checkedAt: generatedAt, retrievedAt: generatedAt, failure: null, note: coinbaseVolumeNote },
+    },
     currentMonthPartial: finalizedSeries.some((item) => item.points.some((point) => monthKey(point.date) > completeThrough)),
     currency: "USD",
     dexVenueCount: dexVenueEntries.length,

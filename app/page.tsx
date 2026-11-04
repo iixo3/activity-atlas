@@ -11,7 +11,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { displayPoints, partialVolumeProjection, percentBounds, resolveDateRange, shouldUseLogScale, toggleAllHidden } from "../lib/activity-math.mjs";
-import { Breakdown, DataHealth, Freshness, Overview, dimensionLabel } from "./insights";
+import { completeComparison } from "../lib/activity-insights.mjs";
+import { Breakdown, DataHealth, Freshness, Overview, Relationships, dimensionLabel } from "./insights";
 
 export type Category = "cex" | "dex" | "prediction";
 type VenueCategory = Category | "cex-hl";
@@ -188,11 +189,6 @@ const QUALITY_LABELS = {
   derived: "Derived",
   proxy: "Proxy",
 };
-const PAIR_LABELS: Record<string, string> = {
-  cex__dex: "CEX ↔ Perp DEX",
-  cex__prediction: "CEX ↔ Prediction",
-  dex__prediction: "Perp DEX ↔ Prediction",
-};
 
 function monthKey(date: string) {
   return date.slice(0, 7);
@@ -256,16 +252,6 @@ function formatMultiple(value: number, digits = 2) {
 
 function firstObserved(points: Point[]) {
   return points.find((point) => point.value > 0) ?? points[0];
-}
-
-function correlationTone(value: number | null) {
-  if (value == null) return "Unavailable";
-  const absolute = Math.abs(value);
-  const direction = value < 0 ? "opposite patterns" : "similar patterns";
-  if (absolute < 0.2) return "No clear linear pattern";
-  if (absolute < 0.4) return `Slightly ${direction}`;
-  if (absolute < 0.7) return `Moderately ${direction}`;
-  return `Strongly ${direction}`;
 }
 
 function useElementWidth<T extends HTMLElement>() {
@@ -796,7 +782,9 @@ export default function Home() {
   const [venueCategory, setVenueCategory] = useState<VenueCategory>("dex");
   const [venueMetric, setVenueMetric] = useState<Metric>("volume");
   const [venueView, setVenueView] = useState<ViewMode>("absolute");
-  const [correlationMetric, setCorrelationMetric] = useState<Metric>("volume");
+  // Shared by the overview and the relationship section, so both read one selection.
+  const [overviewMetric, setOverviewMetric] = useState<Metric>("volume");
+  const [overviewPeriod, setOverviewPeriod] = useState<{ start?: string; end?: string }>({});
   const [compositionVenueId, setCompositionVenueId] = useState("hyperliquid");
   const [compositionDimension, setCompositionDimension] = useState("assetClass");
   const [compositionMetric, setCompositionMetric] = useState("volume24h");
@@ -926,7 +914,7 @@ export default function Home() {
 
   const categoryRows = data?.series.filter((series) => series.id.startsWith("category-")) ?? [];
   const contextSeries = data?.series.filter((series) => series.id.startsWith("context-")) ?? [];
-  const correlations = data?.correlations[correlationMetric];
+  const overview = useMemo(() => data ? completeComparison(data.series, overviewMetric, data.meta.completeThrough, overviewPeriod) : null, [data, overviewMetric, overviewPeriod]);
   const snapshotDate = data
     ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(data.meta.generatedAt))
     : "loading";
@@ -969,7 +957,18 @@ export default function Home() {
       </header>
 
       {data && <Freshness data={data} refreshWarning={refreshWarning} staleSnapshot={staleSnapshot} />}
-      {data && <Overview data={data} onExplore={exploreCategory} />}
+      {data && overview && (
+        <Overview
+          data={data}
+          onExplore={exploreCategory}
+          metric={overviewMetric}
+          setMetric={setOverviewMetric}
+          result={overview}
+          setStart={(start) => setOverviewPeriod((current) => ({ ...current, start }))}
+          setEnd={(end) => setOverviewPeriod((current) => ({ ...current, end }))}
+          onReset={() => setOverviewPeriod({})}
+        />
+      )}
       {!data && !loadError && <div className="loading-state">Loading the market overview…</div>}
       {loadError && <div className="error-state">Could not load the dashboard data. Check your connection and reload this page.</div>}
       {data && <Breakdown data={data} />}
@@ -1166,46 +1165,13 @@ export default function Home() {
         {!data && !loadError && <div className="loading-state">Loading composition datasets…</div>}
       </section>
 
-      <section className="section-block correlation-section" id="correlation" aria-labelledby="correlation-title">
-        <div className="section-head">
-          <div>
-            <p className="section-kicker">Explore the relationship</p>
-            <h2 id="correlation-title">Do these markets move together?</h2>
-            <p>Compare their month-to-month changes—not their size. A similar pattern does not show that one market causes another to move.</p>
-          </div>
-          <MetricControls metric={correlationMetric} setMetric={setCorrelationMetric} view="absolute" setView={() => undefined} showView={false} />
-        </div>
-        {correlations && (
-          <>
-            <div className="correlation-grid">
-              {Object.entries(correlations.pairs).map(([pair, result]) => (
-                <article key={pair} className="correlation-card">
-                  <div>
-                    <p>{correlationMetric === "oi" ? PAIR_LABELS[pair].replace("Perp DEX", "Hyperliquid") : PAIR_LABELS[pair]}</p>
-                  </div>
-                  <h3 className="relationship-result">{correlationTone(result.pearson)}</h3>
-                  <div className="relationship-scale" role="img" aria-label={`Correlation ${result.pearson?.toFixed(2) ?? "unavailable"}: ${correlationTone(result.pearson)}`}>
-                    <span className="relationship-center" />
-                    {result.pearson != null && <i style={{ left: `${(result.pearson + 1) * 50}%` }} />}
-                  </div>
-                  <div className="relationship-labels"><span>Opposite</span><span>No clear pattern</span><span>Similar</span></div>
-                  <p className="relationship-period">{result.observations} monthly changes · {result.start && result.end ? `${monthLabel(result.start)} – ${monthLabel(result.end)}` : "Insufficient history"}</p>
-                  <details className="relationship-details"><summary>Show exact statistics</summary><dl>
-                    <div><dt>Pearson</dt><dd>{result.pearson?.toFixed(2) ?? "—"}</dd></div>
-                    <div><dt>Spearman</dt><dd>{result.spearman?.toFixed(2) ?? "—"}</dd></div>
-                    <div><dt>Months</dt><dd>{result.observations}</dd></div>
-                  </dl></details>
-                </article>
-              ))}
-            </div>
-            <div className="finding-line">
-              <span>READ</span>
-              <p>{correlationMetric === "oi" ? "Open-position coverage differs: centralized exchanges include BTC + ETH futures only; the DEX comparison covers Hyperliquid only. " : "These comparisons use the covered groups, not the whole market. "}The full available overlapping history is used; the overview’s month selectors and chart sliders do not change this analysis. A value near the middle does not rule out other relationships.</p>
-            </div>
-            <details className="source-details"><summary>How this is calculated</summary><p className="method-line">{correlations.method} The marker shows Pearson correlation on a −1 to +1 scale, not a percentage or probability. Spearman provides a rank-based comparison. Descriptive labels use absolute thresholds of 0.2, 0.4 and 0.7; these are not statistical significance tests. Short histories are exploratory.</p></details>
-          </>
-        )}
-      </section>
+      <Relationships
+        data={data}
+        metric={overviewMetric}
+        overview={overview}
+        setPeriod={setOverviewPeriod}
+        controls={<MetricControls metric={overviewMetric} setMetric={setOverviewMetric} view="absolute" setView={() => undefined} showView={false} />}
+      />
 
       {data && contextSeries.length > 0 && (
         <section className="section-block context-section" aria-labelledby="breadth-title">

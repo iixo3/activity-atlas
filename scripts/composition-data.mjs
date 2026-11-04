@@ -12,6 +12,7 @@ const OBSERVATIONS_FILE = path.join(NORMALIZED_DIR, "composition-observations.js
 const DUNE_CLI = process.env.ACTIVITY_ATLAS_DUNE_CLI || "dune";
 const SKIP_DUNE = process.env.ACTIVITY_ATLAS_SKIP_DUNE === "1";
 const REQUEST_HEADERS = { "user-agent": "ActivityAtlas/1.0 research dashboard" };
+export const ARCHIVE_DESCRIPTION = "Dated category, operator and individual-market observations retained at each successful collection. Rolling volumes overlap and must not be summed as calendar-month volume. Uncollected periods remain missing.";
 const HYPERLIQUID_INFO_URL = "https://api.hyperliquid.xyz/info";
 const HYPERLIQUID_OPERATOR_NAMES = {
   "": "Hyperliquid Core",
@@ -633,22 +634,76 @@ export function buildHyperliquidLiveProvider({ records, date, collectedAt, previ
     }
   }
   addTurnoverSeries(map, venue, product, "volume24h", "oiSnapshot", "turnover24h", "24h volume / OI");
+  return { series: retainSnapshotHistory([...map.values()], previous?.series, pointBase.date) };
+}
 
-  const current = [...map.values()];
-  if (!previous?.series?.length) return { series: current };
-  const merged = new Map(current.map((item) => [[item.venue, item.dimension, item.metric, item.group].join("::"), item]));
-  for (const old of previous.series) {
-    if (old.dimension === "instrument") continue;
-    const key = [old.venue, old.dimension, old.metric, old.group].join("::");
-    const historicalPoints = old.points.filter((point) => point.date !== pointBase.date);
-    const next = merged.get(key);
-    if (!next) {
-      if (historicalPoints.length) merged.set(key, { ...old, points: historicalPoints });
-      continue;
+/** Keep earlier months' snapshots beside the current collection, in every
+ * dimension. Each month stays one cohort: the latest collection of that venue,
+ * dimension and month, so top-10 reshuffles, renamed "Other" rows or groups that
+ * disappear later can never add a slice from another collection. The current
+ * month always comes only from the current collection. */
+export function retainSnapshotHistory(current, previous, currentMonth) {
+  const cohortKey = (item, point) => [item.venue, item.dimension, point.date].join("::");
+  const cohorts = new Map();
+  for (const item of previous ?? []) {
+    for (const point of item.points) {
+      if (!point.isSnapshot || !point.collectedAt) continue;
+      const known = cohorts.get(cohortKey(item, point));
+      if (!known || point.collectedAt > known.collectedAt) cohorts.set(cohortKey(item, point), { collectedAt: point.collectedAt, asOfDate: point.asOfDate });
     }
-    next.points = [...historicalPoints, ...next.points].sort((left, right) => left.date.localeCompare(right.date));
   }
-  return { series: [...merged.values()] };
+  const belongs = (item, point) => {
+    const cohort = cohorts.get(cohortKey(item, point));
+    if (!cohort) return true;
+    if (point.isSnapshot) return point.collectedAt === cohort.collectedAt;
+    // Derived turnover carries only its observation date; other history is unrelated.
+    return item.unit !== "multiple" || point.asOfDate === cohort.asOfDate;
+  };
+  const merged = new Map(current.map((item) => [item.id, item]));
+  for (const old of previous ?? []) {
+    const historical = old.points.filter((point) => point.date !== currentMonth && belongs(old, point));
+    const next = merged.get(old.id);
+    if (next) next.points = [...historical, ...next.points].sort((left, right) => left.date.localeCompare(right.date));
+    else if (historical.length) merged.set(old.id, { ...old, points: historical });
+  }
+  return [...merged.values()];
+}
+
+/** Restore one month's instrument snapshot from an earlier cache state. It is
+ * accepted only when it was collected with the retained aggregate cohort for that
+ * month and sums to the same totals, so a stale slice cannot be mixed in.
+ * Returns the merged series, the restored points, and whether anything changed. */
+export function restoreInstrumentSnapshot({ target, source, month, aggregateDimension, valueMetrics }) {
+  const date = `${month}-01`;
+  const pointAt = (item) => item.points.find((point) => point.date === date);
+  const instruments = source.filter((item) => item.dimension === "instrument" && pointAt(item));
+  const measured = instruments.filter((item) => valueMetrics.includes(item.metric));
+  const collections = [...new Set(measured.map((item) => pointAt(item).collectedAt))];
+  if (!measured.length || collections.length !== 1 || !collections[0]) throw new Error(`Source has no single ${month} instrument collection`);
+  const collectedAt = collections[0];
+  const existing = target.filter((item) => item.dimension === "instrument" && pointAt(item));
+  const existingMeasured = existing.filter((item) => valueMetrics.includes(item.metric));
+  if (existingMeasured.length) {
+    if (existingMeasured.every((item) => pointAt(item).collectedAt === collectedAt)) return { series: target, restored: [], changed: false };
+    throw new Error(`Target already holds a different ${month} instrument collection`);
+  }
+  for (const metric of valueMetrics) {
+    const sum = (items) => items.reduce((total, item) => total + pointAt(item).value, 0);
+    const aggregate = target.filter((item) => item.dimension === aggregateDimension && item.metric === metric && pointAt(item));
+    if (!aggregate.length || aggregate.some((item) => pointAt(item).collectedAt !== collectedAt)) throw new Error(`No ${aggregateDimension} ${metric} cohort matches collection ${collectedAt}`);
+    const total = sum(aggregate);
+    const difference = Math.abs(sum(measured.filter((item) => item.metric === metric)) - total);
+    if (difference > Math.max(1e-6, Math.abs(total) * 1e-9)) throw new Error(`${month} instrument ${metric} does not sum to its ${aggregateDimension} cohort`);
+  }
+  const merged = new Map(target.map((item) => [item.id, item]));
+  for (const item of instruments) {
+    const known = merged.get(item.id);
+    const point = pointAt(item);
+    merged.set(item.id, known
+      ? { ...known, points: [...known.points, point].sort((left, right) => left.date.localeCompare(right.date)) }
+      : { ...item, points: [point] });
+  }
+  return { series: [...merged.values()], restored: measured.map((item) => ({ item, point: pointAt(item) })), changed: true };
 }
 
 function dailyProviderRows(marketsWithCandles) {
@@ -799,22 +854,7 @@ function buildSnapshotProvider({ venue, product, records, date, categorySource, 
     }
   }
   addTurnoverSeries(map, venue, product, volumeMetric, "oiSnapshot", turnoverMetric, turnoverLabel);
-
-  const current = [...map.values()];
-  if (!previous?.series?.length) return { series: current };
-  const merged = new Map(current.map((item) => [[item.venue, item.dimension, item.metric, item.group].join("::"), item]));
-  for (const old of previous.series) {
-    if (old.dimension !== "category") continue;
-    const key = [old.venue, old.dimension, old.metric, old.group].join("::");
-    const next = merged.get(key);
-    if (!next) {
-      const historicalPoints = old.points.filter((point) => point.date !== pointBase.date);
-      if (historicalPoints.length) merged.set(key, { ...old, points: historicalPoints });
-      continue;
-    }
-    next.points = [...old.points.filter((point) => point.date !== pointBase.date), ...next.points].sort((left, right) => left.date.localeCompare(right.date));
-  }
-  return { series: [...merged.values()] };
+  return { series: retainSnapshotHistory([...map.values()], previous?.series, pointBase.date) };
 }
 
 function polymarketCategory(event) {
@@ -988,6 +1028,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
   const datasets = { ...(previous.datasets ?? {}) };
   const providers = { ...(previous.providers ?? {}) };
   const warnings = [];
+  const feedFailures = {};
   let duneRefreshedAt = previous.duneRefreshedAt ?? previous.generatedAt ?? null;
   let hyperliquidLiveRefreshedAt = previous.hyperliquidLiveRefreshedAt ?? providers.hyperliquidLive?.refreshedAt ?? null;
 
@@ -1001,6 +1042,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
   if (!hasDuneCache || !Number.isFinite(duneCacheAge) || duneCacheAge >= 12 * 60 * 60_000) {
     if (SKIP_DUNE) {
       warnings.push("Dune refresh skipped by configuration; cached composition retained.");
+      feedFailures.hyperliquid = "Historical source not refreshed: free Dune access cannot run queries. Cached composition retained.";
     } else {
       const duneResults = await Promise.allSettled(duneTasks.map(([, sql]) => runDuneSql(sql)));
       let completeDuneRefresh = true;
@@ -1010,6 +1052,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
         else {
           completeDuneRefresh = false;
           warnings.push(`${key} refresh failed; cached composition retained${result.status === "rejected" ? ` (${result.reason.message})` : ""}.`);
+          if (key.startsWith("hyperliquid")) feedFailures.hyperliquid = `${key} refresh failed; cached composition retained.`;
         }
       });
       if (completeDuneRefresh) duneRefreshedAt = generatedAt;
@@ -1041,6 +1084,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     hyperliquidLiveRefreshedAt = generatedAt;
   } catch (error) {
     warnings.push(`Hyperliquid official live composition refresh failed; cached live snapshot retained (${errorDetails(error)}).`);
+    feedFailures.hyperliquidLive = errorDetails(error);
   }
 
   try {
@@ -1052,6 +1096,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     if (kalshiPerps.failedMarkets) warnings.push(`${kalshiPerps.failedMarkets} Kalshi perp candle feeds failed; available markets were retained.`);
   } catch (error) {
     warnings.push(`Kalshi perps refresh failed; cached composition retained (${error.message}).`);
+    feedFailures.kalshiPerps = error.message;
   }
 
   try {
@@ -1063,11 +1108,12 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
         volumeKey: "volume24h", turnoverMetric: "turnover24h", turnoverLabel: "24h volume / OI",
         previous: providers.kalshiPredictions,
       }),
-      coverageNote: "Current 24h contract volume and OI snapshots; collected twice daily while the dashboard runner is active.",
+      coverageNote: "Current 24h contract volume and OI snapshots; collected at each automatic refresh.",
       refreshedAt: generatedAt,
     };
   } catch (error) {
     warnings.push(`Kalshi prediction composition refresh failed; cached snapshots retained (${error.message}).`);
+    feedFailures.kalshiPredictions = error.message;
   }
 
   try {
@@ -1087,6 +1133,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     };
   } catch (error) {
     warnings.push(`Polymarket composition refresh failed; cached snapshots retained (${errorDetails(error)}).`);
+    feedFailures.polymarket = errorDetails(error);
   }
 
   // Correct the units of cached observations too; raw *_fp values were always
@@ -1106,7 +1153,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
   const archive = await readJsonIfExists(OBSERVATIONS_FILE) ?? { observations: [] };
   const observations = new Map(archive.observations.map((row) => [`${row.id}|${row.collectedAt}`, row]));
   for (const item of rawSeries) {
-    if (item.dimension === "instrument" || item.unit === "multiple") continue;
+    if (item.unit === "multiple") continue;
     for (const point of item.points) {
       if (!point.isSnapshot || !point.collectedAt) continue;
       observations.set(`${item.id}|${point.collectedAt}`, {
@@ -1116,7 +1163,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     }
   }
   await writeAtomic(OBSERVATIONS_FILE, `${JSON.stringify({
-    description: "Dated category/operator observations retained at each successful collection. Rolling volumes overlap and must not be summed as calendar-month volume. Uncollected periods remain missing.",
+    description: ARCHIVE_DESCRIPTION,
     observations: [...observations.values()].sort((a, b) => a.collectedAt.localeCompare(b.collectedAt) || a.id.localeCompare(b.id)),
   })}\n`);
   const series = finalizeCompositionSeries(rawSeries, btcDailyPrices);
@@ -1131,6 +1178,11 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
       hyperliquidLiveRefreshedAt,
       methodology: "Measured values remain separate from classifications. Unknown labels stay Unclassified; turnover is a screening signal, not proof of inflated activity.",
       warnings,
+      feedStatus: Object.fromEntries(Object.keys(providers).map((key) => [key, {
+        checkedAt: generatedAt,
+        retrievedAt: key === "hyperliquid" ? duneRefreshedAt : providers[key]?.refreshedAt ?? null,
+        failure: feedFailures[key] ?? null,
+      }])),
     },
     venues,
     series,
