@@ -11,7 +11,7 @@ const report = [
   "| Feed | Last checked | Last retrieved | Verified observation cutoff | Latest complete month | Status | Retained because / notes |", "| --- | --- | --- | --- | --- | --- | --- |",
   ...rows.map((row) => `| ${cell(row.label)} | ${row.checkedAt ?? "Unknown"} | ${row.retrievedAt ?? "Unknown"} | ${row.observed ?? "Unknown"} | ${row.complete ?? "None verified"} | ${row.status} | ${cell([row.failure, row.note].filter(Boolean).join(" ") || "-")} |`), "",
   "Older historical composition is an upstream availability limit; current snapshots refresh separately.",
-  ...(reconciliation ? [`Hyperliquid open interest, unresolved: vendor total ${Math.round(reconciliation.vendorValue)} USD (${reconciliation.vendorDate}) vs official snapshot sum ${Math.round(reconciliation.officialValue)} USD (${reconciliation.collectedAt}); official is ${reconciliation.ratio.toFixed(2)}x vendor. Neither is adjusted.`] : []),
+  ...(reconciliation?.sameDate ? [`Hyperliquid one-sided OI cross-check: vendor ${Math.round(reconciliation.vendorValue)} USD (${reconciliation.vendorDate}); official snapshot ${Math.round(reconciliation.officialValue)} USD (${reconciliation.collectedAt}); ratio ${reconciliation.ratio.toFixed(3)}x. Collection times can differ.`] : []),
   "",
 ].join("\n");
 console.log(report);

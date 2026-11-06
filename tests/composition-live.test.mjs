@@ -192,6 +192,11 @@ test("the persisted October individual-asset snapshot survives a simulated next 
   assert.ok(Math.abs(before.volumeTotal - aggregate.volumeTotal) <= aggregate.volumeTotal * 1e-9);
   assert.ok(Math.abs(before.oiTotal - aggregate.oiTotal) <= aggregate.oiTotal * 1e-9);
 
+  const published = JSON.parse(await readFile(new URL("../public/data/activity-data.json", import.meta.url), "utf8"));
+  const display = compositionComparison(published.composition.series, "Hyperliquid", "instrument", "volume24h", "oiSnapshot", "2026-10-01");
+  assert.ok(Math.abs(display.oiTotal - before.oiTotal / 2) <= before.oiTotal * 1e-9, "published OI counts each contract once");
+  assert.equal(display.volumeTotal, before.volumeTotal);
+
   const records = liveRecords([["NEW", 10, 5], ["BTC", 20, 8]]);
   const refreshed = buildHyperliquidLiveProvider({ records, date: "2026-12-01", collectedAt: "2026-12-01T07:00:00.000Z", previous });
   const after = compositionComparison(refreshed.series, "Hyperliquid", "instrument", "volume24h", "oiSnapshot", "2026-10-01");

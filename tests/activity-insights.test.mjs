@@ -435,7 +435,7 @@ test("an unsupported month stays selected with an explicit reason instead of jum
   assert.equal(unsupported.view, "snapshot", "Polymarket offers snapshots only");
   assert.equal(unsupported.comparison.date, "2026-08-01");
   assert.deepEqual(unsupported.comparison.rows, []);
-  assert.match(unsupported.comparison.reason, /Polymarket has no collected snapshot for Aug 2026\. Available: Oct 2026 to Nov 2026/);
+  assert.match(unsupported.comparison.reason, /Polymarket has no usable collected snapshot for Aug 2026\. Latest available: Nov 2026/);
   assert.deepEqual(unsupported.dateOptions, [
     { value: "2026-08-01", available: false },
     { value: "2026-10-01", available: true },
@@ -456,7 +456,7 @@ test("a group lacking the chosen snapshot month reports it and keeps the month",
   const result = resolveBreakdown(composition, state);
   assert.equal(result.comparison.date, "2026-10-01");
   assert.deepEqual(result.dateOptions.map((option) => [option.value, option.available]), [["2026-10-01", false], ["2026-11-01", true]]);
-  assert.match(result.comparison.reason, /Hyperliquid has no collected snapshot for Oct 2026/);
+  assert.match(result.comparison.reason, /Hyperliquid has no usable collected snapshot for Oct 2026/);
 });
 
 test("views stay honest per platform, and an unchosen date follows that platform's latest", () => {
@@ -472,12 +472,12 @@ test("views stay honest per platform, and an unchosen date follows that platform
   const perps = resolveBreakdown(composition, { ...initialBreakdownState, venueId: "kalshi-perps" });
   assert.equal(perps.view, "month");
   assert.equal(perps.comparison.date, "2026-10-01", "the partial month is not offered as complete");
-  assert.match(perps.viewNote, /full calendar months only/);
+  assert.deepEqual(Object.keys(perps.views), ["month"]);
   const predictions = resolveBreakdown(composition, { ...initialBreakdownState, venueId: "kalshi-predictions" });
   assert.equal(predictions.contracts, true);
   assert.equal(predictions.volumeMetric, "volume24h");
   assert.equal(predictions.collectedAtByDate["2026-10-01"], "2026-10-30T08:00:00Z");
-  assert.match(resolveBreakdown(composition, { ...initialBreakdownState, venueId: "polymarket" }).viewNote, /weekly-bucket/);
+  assert.deepEqual(Object.keys(resolveBreakdown(composition, { ...initialBreakdownState, venueId: "polymarket" }).views), ["snapshot"]);
   assert.equal(resolveBreakdown(composition, initialBreakdownState).viewNote, null);
 });
 

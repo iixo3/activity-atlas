@@ -573,7 +573,8 @@ const series = [
     points: bybitOi,
   },
   ...dexVenueEntries
-    .filter((entry) => dexTopTen.includes(entry.name))
+    // Keep both overview comparisons available even if a venue falls out of the drilldown ranking.
+    .filter((entry) => dexTopTen.includes(entry.name) || ["Hyperliquid", "PaperTrade"].includes(entry.name))
     .map((entry) => ({
       id: `dex-${entry.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-volume`,
       category: "dex",

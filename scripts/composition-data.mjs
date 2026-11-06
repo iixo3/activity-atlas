@@ -3,16 +3,19 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { btcEquivalent } from "../lib/activity-math.mjs";
+import { HYPERLIQUID_ARCHIVE_OI } from "../lib/activity-insights.mjs";
 
 const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const NORMALIZED_DIR = path.join(ROOT, "data", "normalized");
 const CACHE_FILE = path.join(NORMALIZED_DIR, "composition-cache.json");
 const OBSERVATIONS_FILE = path.join(NORMALIZED_DIR, "composition-observations.json");
+const HYPERLIQUID_OI_FILE = path.join(NORMALIZED_DIR, "hyperliquid-month-end-oi.json");
+const HYPERLIQUID_OI_DATASET = "https://huggingface.co/datasets/ironflow/hyperliquid-open-interest";
 const DUNE_CLI = process.env.ACTIVITY_ATLAS_DUNE_CLI || "dune";
 const SKIP_DUNE = process.env.ACTIVITY_ATLAS_SKIP_DUNE === "1";
 const REQUEST_HEADERS = { "user-agent": "ActivityAtlas/1.0 research dashboard" };
-export const ARCHIVE_DESCRIPTION = "Dated category, operator and individual-market observations retained at each successful collection. Rolling volumes overlap and must not be summed as calendar-month volume. Uncollected periods remain missing.";
+export const ARCHIVE_DESCRIPTION = "Dated category, operator and individual-market observations retained at each successful collection. Raw Hyperliquid OI observations count both sides, as reported by the API. Published OI counts each contract once. Rolling volumes overlap and must not be summed as calendar-month volume. Uncollected periods remain missing.";
 const HYPERLIQUID_INFO_URL = "https://api.hyperliquid.xyz/info";
 const HYPERLIQUID_OPERATOR_NAMES = {
   "": "Hyperliquid Core",
@@ -331,7 +334,7 @@ function upsertPoint(seriesMap, spec, point) {
 
 function metricBtcKind(metric) {
   if (["monthlyVolume", "monthlyVolumeApprox"].includes(metric)) return "volume";
-  if (["averageOi", "monthEndOi", "oiSnapshot", "volume24h", "volume30d"].includes(metric)) return "oi";
+  if (["averageOi", "monthEndOi", HYPERLIQUID_ARCHIVE_OI, "oiSnapshot", "volume24h", "volume30d"].includes(metric)) return "oi";
   return null;
 }
 
@@ -370,6 +373,59 @@ function providerRetrievedAt(provider, fallback) {
 
 function platformMap(points) {
   return new Map((points ?? []).map((point) => [monthKey(point.date), point]));
+}
+
+function buildHyperliquidArchiveOi(archive, platformOi, completeThrough) {
+  const reference = platformMap(platformOi);
+  const months = archive.months.filter(({ date }) => monthKey(date) <= completeThrough);
+  const ranking = new Map();
+  for (const month of months) {
+    for (const [coin, , value] of month.markets) ranking.set(coin, (ranking.get(coin) ?? 0) + value);
+  }
+  const topMarkets = new Set([...ranking].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([coin]) => coin));
+  const map = new Map();
+  for (const { date, asOfDate, markets } of months) {
+    const benchmark = reference.get(monthKey(date));
+    const total = markets.reduce((sum, [, , value]) => sum + value / 2, 0);
+    if (!(benchmark?.value > 0) || benchmark.asOfDate !== asOfDate || Math.abs(total / benchmark.value - 1) > 0.01) {
+      throw new Error(`Ironflow Hyperliquid OI for ${monthKey(date)} failed the same-date 1% total check`);
+    }
+    const dimensions = { assetClass: new Map(), operator: new Map(), instrument: new Map() };
+    for (const [coin, dex, value] of markets) {
+      const assetClass = dex ? HYPERLIQUID_ASSET_CLASSES[archive.annotations[coin]] ?? "Unclassified" : "Crypto";
+      const groups = {
+        assetClass,
+        operator: HYPERLIQUID_OPERATOR_NAMES[dex] ?? dex,
+        instrument: topMarkets.has(coin) ? coin : "Other markets",
+      };
+      for (const [dimension, group] of Object.entries(groups)) {
+        const totals = dimensions[dimension];
+        totals.set(group, (totals.get(group) ?? 0) + value / 2);
+      }
+    }
+    for (const [dimension, totals] of Object.entries(dimensions)) {
+      for (const [group, value] of totals) {
+        upsertPoint(map, {
+          venue: "Hyperliquid", product: "Perpetual futures", dimension, group,
+          metric: HYPERLIQUID_ARCHIVE_OI, metricLabel: "Month-end OI · Ironflow", unit: "usd",
+          quality: "derived", classificationSource: "Hyperliquid market annotations and HIP-3 identifiers",
+          definition: "Ironflow's final hourly reading of each UTC month, divided by two to count each contract once. Individual markets use a fixed top ten ranked across the included months.",
+        }, { date, asOfDate, value, isComplete: true });
+      }
+    }
+  }
+  return { series: [...map.values()], refreshedAt: archive.retrievedAt };
+}
+
+function publishOneSidedSnapshot(item) {
+  if (item.venue !== "Hyperliquid") return item;
+  const scale = item.metric === "oiSnapshot" ? 0.5 : item.metric === "turnover24h" ? 2 : 1;
+  if (scale === 1) return item;
+  return {
+    ...item,
+    definition: `${item.definition} Published open interest counts each contract once (half the API value).`,
+    points: item.points.map((point) => ({ ...point, value: point.value * scale })),
+  };
 }
 
 function reconcileRows(rows, valueKey, platformPoints) {
@@ -994,7 +1050,7 @@ function venueCatalog(providers) {
     {
       id: "hyperliquid", label: "Hyperliquid", product: "Native + HIP-3 perpetuals", defaultDimension: "assetClass", defaultMetric: "monthlyVolume",
       dimensions: [{ id: "assetClass", label: "Asset class" }, { id: "operator", label: "Operator / deployer" }, { id: "instrument", label: "Underlying" }],
-      qualityVolumeMetric: "monthlyVolume", qualityOiMetric: "averageOi", coverageNote: `${providers.hyperliquid?.coverageNote ?? ""} Monthly historical composition last refreshed ${providers.hyperliquid?.refreshedAt?.slice(0, 10) ?? "unknown"}. Official rolling 24h volume and OI snapshots are separate metrics; latest successful collection ${providers.hyperliquidLive?.refreshedAt?.slice(0, 10) ?? "unavailable"}.`,
+      qualityVolumeMetric: "monthlyVolume", qualityOiMetric: "averageOi", coverageNote: `${providers.hyperliquid?.coverageNote ?? ""} Legacy 21Shares/Dune breakdowns last retrieved ${providers.hyperliquid?.refreshedAt?.slice(0, 10) ?? "unknown"}. Ironflow month-end open interest is a separate archive series. Official snapshots use rolling 24h volume and one-sided OI; latest collection ${providers.hyperliquidLive?.refreshedAt?.slice(0, 10) ?? "unavailable"}.`,
     },
     {
       id: "kalshi-perps", label: "Kalshi Perps", product: "Perpetual futures", defaultDimension: "assetClass", defaultMetric: "monthlyVolume",
@@ -1031,6 +1087,14 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
   const feedFailures = {};
   let duneRefreshedAt = previous.duneRefreshedAt ?? previous.generatedAt ?? null;
   let hyperliquidLiveRefreshedAt = previous.hyperliquidLiveRefreshedAt ?? providers.hyperliquidLive?.refreshedAt ?? null;
+
+  try {
+    const archive = await readJsonIfExists(HYPERLIQUID_OI_FILE);
+    if (archive) providers.hyperliquidArchiveOi = buildHyperliquidArchiveOi(archive, hyperliquidOi, completeThrough);
+  } catch (error) {
+    warnings.push(`Hyperliquid month-end OI archive rejected: ${error.message}`);
+    feedFailures.hyperliquidArchiveOi = error.message;
+  }
 
   const duneTasks = [
     ["hyperliquidVolume", HYPERLIQUID_VOLUME_SQL],
@@ -1166,7 +1230,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     description: ARCHIVE_DESCRIPTION,
     observations: [...observations.values()].sort((a, b) => a.collectedAt.localeCompare(b.collectedAt) || a.id.localeCompare(b.id)),
   })}\n`);
-  const series = finalizeCompositionSeries(rawSeries, btcDailyPrices);
+  const series = finalizeCompositionSeries(rawSeries.map(publishOneSidedSnapshot), btcDailyPrices);
   const venues = venueCatalog(providers);
   const cache = { generatedAt, duneRefreshedAt, hyperliquidLiveRefreshedAt, datasets, providers };
   await writeAtomic(CACHE_FILE, `${JSON.stringify(cache)}\n`);
@@ -1179,7 +1243,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
       methodology: "Measured values remain separate from classifications. Unknown labels stay Unclassified; turnover is a screening signal, not proof of inflated activity.",
       warnings,
       feedStatus: Object.fromEntries(Object.keys(providers).map((key) => [key, {
-        checkedAt: generatedAt,
+        checkedAt: key === "hyperliquidArchiveOi" ? providers[key]?.refreshedAt : generatedAt,
         retrievedAt: key === "hyperliquid" ? duneRefreshedAt : providers[key]?.refreshedAt ?? null,
         failure: feedFailures[key] ?? null,
       }])),
@@ -1187,6 +1251,12 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
     venues,
     series,
     sources: [
+      ...(providers.hyperliquidArchiveOi?.series?.length ? [{
+        key: "hyperliquidArchiveOi", publisher: "Ironflow", title: "Hyperliquid open interest by market · month-end archive",
+        page: HYPERLIQUID_OI_DATASET, api: `${HYPERLIQUID_OI_DATASET}/tree/main/data`, retrievedAt: providers.hyperliquidArchiveOi.refreshedAt,
+        reportedFrequency: "Hourly archive, sampled at UTC month-end", upstreamSources: ["Ironflow Hyperliquid node and market poller", "Hyperliquid market annotations"],
+        body: "CC BY 4.0. The final hourly value for each month is divided by two. Each month is checked against the same-date platform OI and retained as a separate series. Market categories without official annotations are Unclassified.",
+      }] : []),
       {
         key: "hyperliquidCompositionVolume", publisher: "21Shares Research / Hyperliquid", title: "Hyperliquid daily per-market volume backbone",
         page: "https://dune.com", api: "dune.\"21sharesresearch\".dataset_hyperliquid_volume_backbone_full", retrievedAt: duneRefreshedAt ?? generatedAt,
@@ -1204,7 +1274,7 @@ export async function buildCompositionData({ generatedAt, today, completeThrough
         page: "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint", api: HYPERLIQUID_INFO_URL,
         retrievedAt: providerRetrievedAt(providers.hyperliquidLive, hyperliquidLiveRefreshedAt ?? generatedAt),
         reportedFrequency: "At each dashboard refresh", upstreamSources: [],
-        body: "Official Core and HIP-3 metaAndAssetCtxs plus perpConciseAnnotations. Rolling 24h volume uses dayNtlVlm; OI uses openInterest × markPx. Values are nominal USD-equivalent for chart compatibility. Official collateralToken IDs are retained on points; no cross-collateral FX conversion is applied.",
+        body: "Official Core and HIP-3 metaAndAssetCtxs plus perpConciseAnnotations. Rolling 24h volume uses dayNtlVlm; published OI uses openInterest × markPx ÷ 2. Values are nominal USD-equivalent. CollateralToken IDs are retained; no cross-collateral FX conversion is applied.",
       }] : []),
       {
         key: "kalshiPerpsComposition", publisher: "Kalshi", title: "Kalshi perpetual-futures markets and daily candles",

@@ -728,19 +728,19 @@ main { max-width: 1540px; margin: auto; }
 .comparison-period .text-button { font-size: 14px; margin-left: 6px; }
 .overview-definition { font-size: 14px; color: var(--muted); margin: 16px 0 18px; line-height: 1.6; }
 .overview-definition b { color: var(--text); }
-.comparison-timeline { margin-top: 14px; padding: 12px 16px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; }
-.comparison-timeline summary { font-size: 14px; cursor: pointer; color: var(--text); }
-.comparison-timeline > p { font-size: 13px; color: var(--muted); margin: 12px 0; line-height: 1.5; }
-.month-timeline { position: relative; height: 46px; margin: 0 12px; }
-.month-timeline-track { position: absolute; top: 17px; left: 0; right: 0; height: 12px; border: 1px solid var(--line-strong); background: repeating-linear-gradient(90deg, var(--panel-subtle) 0, var(--panel-subtle) calc(100% / 44 - 1px), var(--line-strong) calc(100% / 44 - 1px), var(--line-strong) calc(100% / 44)); }
+.comparison-timeline { margin-top: 7px; }
+.comparison-timeline > p { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.5; }
+.comparison-timeline a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.month-timeline { position: relative; height: 36px; }
+.month-timeline-track { position: absolute; top: 15px; left: 10px; right: 10px; height: 6px; border-radius: 6px; background: var(--line-strong); }
 .month-timeline-track > i { position: absolute; left: var(--range-start); right: calc(100% - var(--range-end)); top: 0; bottom: 0; background: var(--bulletin); opacity: .8; }
 .month-timeline input { position: absolute; inset: 0; width: 100%; margin: 0; appearance: none; background: transparent; pointer-events: none; }
-.month-timeline input::-webkit-slider-runnable-track { background: transparent; height: 42px; }
-.month-timeline input::-webkit-slider-thumb { appearance: none; width: 18px; height: 38px; margin-top: 2px; border: 2px solid var(--text); border-radius: 3px; background: var(--bulletin); pointer-events: auto; cursor: ew-resize; }
+.month-timeline input::-webkit-slider-runnable-track { background: transparent; height: 36px; }
+.month-timeline input::-webkit-slider-thumb { appearance: none; width: 20px; height: 26px; margin-top: 5px; border: 2px solid var(--text); border-radius: 9px; background: var(--bulletin); pointer-events: auto; cursor: ew-resize; }
 .month-timeline input::-moz-range-track { background: transparent; }
-.month-timeline input::-moz-range-thumb { width: 16px; height: 36px; border: 2px solid var(--text); border-radius: 3px; background: var(--bulletin); pointer-events: auto; cursor: ew-resize; }
+.month-timeline input::-moz-range-thumb { width: 16px; height: 22px; border: 2px solid var(--text); border-radius: 9px; background: var(--bulletin); pointer-events: auto; cursor: ew-resize; }
+.month-timeline input:focus { z-index: 1; }
 .month-timeline-labels { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--muted); }
-.month-timeline-labels b { color: var(--text); font-weight: 550; }
 .recap-grid { gap: 16px; }
 .recap-card { padding: 20px 20px 0; border: 2px solid var(--line-strong); border-top: 5px solid var(--category-color); border-radius: 5px; box-shadow: 4px 4px 0 color-mix(in srgb, var(--category-color) 30%, transparent); }
 .recap-title h2 { font-size: 18px; }
@@ -755,6 +755,10 @@ main { max-width: 1540px; margin: auto; }
 .secondary-metric { margin: 0 -20px; padding: 14px 20px; border-radius: 0; }
 .secondary-metric span { font-size: 13px; max-width: 210px; }
 .secondary-metric b { font-size: 17px; }
+.recap-volume-split { margin: 0 0 14px; padding: 10px 12px; border-radius: 4px; background: var(--panel-subtle); font-size: 14px; }
+.recap-volume-split > div { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; padding: 5px 0; }
+.recap-volume-split dd { margin: 0; text-align: right; }
+.recap-volume-split small { display: block; color: var(--muted); font-size: 12px; }
 .overview-footnote { font-size: 13px; }
 .relative-panel { border: 2px solid var(--line-strong); border-radius: 5px; gap: 32px; padding: 26px; }
 .relative-copy h2 { font-size: 29px; margin-bottom: 16px; }
@@ -789,16 +793,7 @@ main { max-width: 1540px; margin: auto; }
   .comparison-period { gap: 8px; font-size: 14px; }
   .comparison-period select { font-size: 14px; padding: 9px 22px 9px 9px; }
   .comparison-period .text-button { font-size: 13px; margin-left: 0; }
-  .month-timeline-labels { font-size: 11px; flex-wrap: wrap; }
-  .month-timeline-labels b { order: -1; width: 100%; text-align: center; font-size: 13px; }
-  .month-timeline { height: 94px; margin-left: 48px; }
-  .month-timeline::before, .month-timeline::after { position: absolute; left: -46px; font-size: 12px; color: var(--muted); }
-  .month-timeline::before { content: "From"; top: 14px; }
-  .month-timeline::after { content: "To"; top: 62px; }
-  .month-timeline-track { box-shadow: 0 48px 0 var(--panel-subtle); }
-  .month-timeline-track > i { box-shadow: 0 48px 0 var(--bulletin); }
-  .month-timeline input:first-of-type { top: 0; bottom: auto; height: 44px; }
-  .month-timeline input:last-of-type { top: 48px; bottom: auto; height: 44px; }
+  .month-timeline-labels { font-size: 12px; }
   .recap-card { display: block; padding: 18px 18px 0; }
   .recap-title h2 { font-size: 18px; }
   .recap-scope { min-height: 0; margin-bottom: 14px; font-size: 13px; }
@@ -828,6 +823,8 @@ main { max-width: 1540px; margin: auto; }
 .breakdown-context > b { color: var(--text); }
 .breakdown-context.is-old .older-observation { color: var(--warm); }
 .breakdown-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding-top: 16px; padding-bottom: 14px; }
+@media (min-width: 761px) { .breakdown-controls.single-view { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.breakdown-unavailable .text-button { margin-left: 5px; }
 .breakdown-controls label { min-width: 0; color: var(--text); font-size: 16px; font-weight: 550; }
 .breakdown-controls select { width: 100%; min-width: 0; min-height: 52px; padding: 12px 30px 12px 14px; font-size: 16px; font-weight: 400; }
 .group-help { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; }

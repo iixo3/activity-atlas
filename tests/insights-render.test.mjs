@@ -99,22 +99,23 @@ test("Breakdown shows the recovered October individual-asset snapshot with its c
   assert.match(html, /rolling 24-hour trading and open interest at collection/);
   assert.match(html, /It is not a total for Oct 2026/);
   assert.match(html, /<option value="snapshot" selected="">Collected snapshot<\/option>/);
-  assert.match(html, /<option value="month">Full calendar month<\/option>/);
+  assert.match(html, /<option value="monthEndOi">Month-end open interest<\/option>/);
+  assert.doesNotMatch(html, /<option value="month">/);
   assert.match(html, /<option value="2026-10-01" selected="">Oct 2026 · collected Oct 31<\/option>/);
   assert.doesNotMatch(html, /open.position/i);
 });
 
 test("Breakdown keeps an unsupported month selected and explains it rather than jumping", () => {
   const html = decode(render(Breakdown, { data, initialState: { venueId: "polymarket", view: "month", selectedDate: "2026-08-01" } }));
-  assert.match(html, /<option value="2026-08-01" selected="">Aug 2026 · unavailable<\/option>/);
-  assert.match(html, /Polymarket has no collected snapshot for Aug 2026\. Available: /);
-  assert.match(html, /<option value="month" disabled="">Full calendar month · not offered<\/option>/);
-  assert.match(html, /weekly-bucket category history is not an exact calendar month/);
+  assert.match(html, /<option value="2026-08-01" disabled="" selected="">Aug 2026 · unavailable<\/option>/);
+  assert.match(html, /Polymarket has no usable collected snapshot for Aug 2026\. Latest available: /);
+  assert.doesNotMatch(html, /aria-label="View"/);
+  assert.match(html, /Use latest available month/);
 });
 
 test("a month with an unmatched segment is withheld and names that segment", () => {
   const html = decode(render(Breakdown, { data, initialState: { view: "month", selectedDate: "2026-08-01" } }));
-  assert.match(html, /<option value="2026-08-01" selected="">Aug 2026<\/option>/);
+  assert.match(html, /<option value="2026-08-01" disabled="" selected="">Aug 2026 · unavailable<\/option>/);
   assert.match(html, /Some segments lack a matching measurement \(no trading measurement: Pre-IPO \/ private\)/);
   assert.match(html, /Full calendar month unavailable for this selection/);
 });
@@ -129,8 +130,7 @@ test("Breakdown keeps each platform's real window and unit", () => {
   const perps = decode(render(Breakdown, { data, initialState: { venueId: "kalshi-perps" } }));
   assert.match(perps, /Full calendar month: /);
   assert.match(perps, /daily-average open interest/);
-  assert.match(perps, /publishes full calendar months only/);
-  assert.match(perps, /<option value="snapshot" disabled="">Collected snapshot · not offered<\/option>/);
+  assert.doesNotMatch(perps, /aria-label="View"/);
 });
 
 test("the freshness panel separates check time, cutoff and complete month, and includes Coinbase volume", () => {
@@ -143,5 +143,28 @@ test("the freshness panel separates check time, cutoff and complete month, and i
   assert.match(html, /Cutoff unknown/);
   assert.match(html, /Latest complete month: /);
   assert.match(html, /Retained, not new: /);
-  assert.match(html, /Hyperliquid open interest is unresolved between sources/);
+  assert.match(html, /Hyperliquid · month-end open interest \(Ironflow\)/);
+});
+
+test("Hyperliquid month-end archive has distinct OI-only coverage for September and October", () => {
+  for (const [date, label, total] of [["2026-09-01", "Sep", 8.376], ["2026-10-01", "Oct", 7.453]]) {
+    const html = decode(render(Breakdown, { data, initialState: { view: "monthEndOi", dimensionId: "instrument", selectedDate: date } }));
+    assert.match(html, new RegExp("Month-end open interest: " + label + " 2026"));
+    assert.match(html, /Trading volume is not part of this view/);
+    assert.doesNotMatch(html, /Trading share|Trading ÷ OI/);
+    for (const dimension of ["assetClass", "operator", "instrument"]) {
+      const sum = data.composition.series.filter((item) => item.venue === "Hyperliquid" && item.dimension === dimension && item.metric === "archiveMonthEndOi")
+        .reduce((value, item) => value + (item.points.find((point) => point.date === date)?.value ?? 0), 0);
+      assert.ok(Math.abs(sum / 1e9 - total) < .001, `${dimension} ${date}: ${sum}`);
+    }
+  }
+});
+
+test("October overview identifies PaperTrade and Hyperliquid separately and keeps the ruler visible", () => {
+  const metric = "volume";
+  const result = completeComparison(data.series, metric, data.meta.completeThrough, { start: "2026-09-01", end: "2026-10-01" });
+  const html = decode(render(Overview, { data, onExplore: noop, metric, setMetric: noop, result, setStart: noop, setEnd: noop, onReset: noop }));
+  assert.match(html, /<div class="comparison-timeline" role="group"/);
+  assert.match(html, /PaperTrade<small>Separate protocol<\/small><\/dt><dd><b>\$[\d.]+T<\/b><small>[\d.]+% of covered DEX volume/);
+  assert.match(html, /Hyperliquid<\/dt><dd><b>\$[\d.]+B<\/b><small>[\d.]+% of covered CEX volume/);
 });

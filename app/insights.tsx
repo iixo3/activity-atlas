@@ -17,9 +17,10 @@ export const dimensionLabel = (dimension: { id: string; label: string }) => dime
   : dimension.id === "instrument" && dimension.label === "Underlying" ? "Individual assets" : dimension.label;
 const scope = (category: Category, metric: Metric) => category === "cex"
   ? (metric === "volume" ? "Binance perpetuals + Bybit & Kraken total futures · Coinbase excluded" : "Binance, Bybit & Kraken · BTC + ETH futures only · Coinbase excluded")
-  : category === "dex" ? (metric === "volume" ? "Perpetual DEXs · all venues in our source" : "Historical DEX coverage is Hyperliquid only")
+  : category === "dex" ? (metric === "volume" ? "All covered perpetual DEXs" : "Historical DEX coverage is Hyperliquid only")
     : "Polymarket, Polymarket US & Kalshi · coverage varies over time";
 const withSelected = (options: string[], selected?: string) => selected && !options.includes(selected) ? [...options, selected].sort() : options;
+const monthIndex = (date: string) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1;
 
 function useClock() {
   const [now, setNow] = useState(() => new Date().toISOString());
@@ -81,9 +82,19 @@ export function Overview({ data, onExplore, metric, setMetric, result, setStart,
   const historyMax = Math.max(1, ...history.map((point) => point.value));
   const historyMin = Math.min(0, ...history.map((point) => point.value));
   const path = history.map((point, index) => `${index ? "L" : "M"}${8 + index / Math.max(1, history.length - 1) * 624},${94 - (point.value - historyMin) / (historyMax - historyMin) * 78}`).join(" ");
-  const startIndex = Math.max(0, dates.indexOf(result.start ?? ""));
-  const endIndex = Math.max(startIndex + 1, dates.indexOf(result.end ?? ""));
-  const timelineDenominator = Math.max(1, dates.length - 1);
+  const firstMonth = dates[0] ? monthIndex(dates[0]) : 0;
+  const span = dates.length > 1 ? monthIndex(dates.at(-1)!) - firstMonth : 1;
+  const position = (date?: string, fallback = 0) => date ? Math.max(0, Math.min(span, monthIndex(date) - firstMonth)) : fallback;
+  const startIndex = position(result.start);
+  const endIndex = position(result.end, span);
+  const setTimelineMonth = (next: number, start: boolean) => {
+    const eligible = dates.filter((date) => start ? !result.end || date < result.end : !result.start || date > result.start);
+    const target = next + firstMonth;
+    const forward = next >= (start ? startIndex : endIndex);
+    const date = forward ? eligible.find((date) => monthIndex(date) >= target) : eligible.findLast((date) => monthIndex(date) <= target);
+    if (date) (start ? setStart : setEnd)(date);
+  };
+  const monthValue = (id: string) => data.series.find((item) => item.id === id)?.points.find((point) => point.date === result.end && point.isComplete !== false)?.value;
   return <section className="overview-story" id="overview" aria-labelledby="overview-title">
     <div className="overview-toolbar">
       <p className="eyebrow">The big picture <span> / </span> Complete months</p>
@@ -104,22 +115,24 @@ export function Overview({ data, onExplore, metric, setMetric, result, setStart,
       <label className="month-chip"><span className="sr-only">Comparison end month</span><select aria-label="Comparison end month" value={result.end ?? ""} onChange={(event) => setEnd(event.target.value)}>{withSelected(dates.filter((date) => !result.start || date > result.start), result.end).map((date) => <option key={date} value={date}>{month(date)}{dates.includes(date) ? "" : " · unavailable"}</option>)}</select></label>
       <button className="text-button" onClick={onReset}>Latest comparison ↺</button>
     </div>
-    {dates.length > 1 && <details className="comparison-timeline">
-      <summary>Explore another period on the timeline</summary>
-      <p>Drag either handle to choose a month. We compare the two selected months, not the total between them. The relationship section uses every monthly change inside this period.</p>
-      <div className="month-timeline" style={{ "--range-start": `${100 * startIndex / timelineDenominator}%`, "--range-end": `${100 * endIndex / timelineDenominator}%` } as CSSProperties}>
-        <div className="month-timeline-track"><i /></div>
-        <input type="range" min="0" max={dates.length - 1} value={startIndex} aria-label="Timeline start month" aria-valuetext={month(dates[startIndex])} onChange={(event) => setStart(dates[Math.min(Number(event.target.value), endIndex - 1)])} />
-        <input type="range" min="0" max={dates.length - 1} value={endIndex} aria-label="Timeline end month" aria-valuetext={month(dates[Math.min(endIndex, dates.length - 1)])} onChange={(event) => setEnd(dates[Math.max(Number(event.target.value), startIndex + 1)])} />
+    {dates.length > 1 && <div className="comparison-timeline" role="group" aria-label="Comparison timeline">
+      <div className="month-timeline" style={{ "--range-start": `${100 * startIndex / span}%`, "--range-end": `${100 * endIndex / span}%` } as CSSProperties}>
+        <div className="month-timeline-track" aria-hidden="true"><i /></div>
+        <input type="range" min="0" max={span} value={startIndex} aria-label="Timeline start month" aria-valuetext={month(result.start ?? dates[0])} onChange={(event) => setTimelineMonth(Number(event.target.value), true)} />
+        <input type="range" min="0" max={span} value={endIndex} aria-label="Timeline end month" aria-valuetext={month(result.end ?? dates.at(-1)!)} onChange={(event) => setTimelineMonth(Number(event.target.value), false)} />
       </div>
-      <div className="month-timeline-labels"><span>{month(dates[0])}</span><b>{result.start && month(result.start)} → {result.end && month(result.end)}</b><span>{month(dates.at(-1)!)}</span></div>
-    </details>}
+      <div className="month-timeline-labels"><span>{month(dates[0])}</span><span>{month(dates.at(-1)!)}</span></div>
+      <p>Cards compare the two chosen months. <a href="#correlation">See how markets moved between them ↘</a></p>
+    </div>}
     <p className="overview-definition">{metric === "volume" ? <><b>Trading volume:</b> the reported value traded during each month.</> : <><b>Open interest:</b> the reported value of contracts still open at month-end.</>}</p>
     {!rows.length && <p className="insight-note">Matching complete months are unavailable for this selection. Choose another period; missing values are never treated as zero.</p>}
     <div className="recap-grid">
       {rows.map((row) => {
         const category = row.category as Category;
-        const secondary = data.series.find((item) => item.id === `category-${category}-${metric === "volume" ? "oi" : "volume"}`)?.points.find((point) => point.date === result.end && point.isComplete !== false);
+        const secondary = monthValue(metric === "oi" && category === "dex" ? "dex-hyperliquid-volume" : `category-${category}-${metric === "volume" ? "oi" : "volume"}`);
+        const hyperliquid = category === "dex" && metric === "volume" ? monthValue("dex-hyperliquid-volume") : undefined;
+        const paperTrade = category === "dex" && metric === "volume" ? monthValue("dex-papertrade-volume") : undefined;
+        const cex = rows.find((row) => row.category === "cex")?.value;
         return <article className="recap-card" key={category} style={{ "--category-color": COLORS[category] } as CSSProperties}>
           <div className="recap-title"><span className="category-dot" /><h2>{name(category, metric)}</h2><span className="recap-number">0{["cex", "dex", "prediction"].indexOf(category) + 1}</span></div>
           <p className="recap-scope">{scope(category, metric)}</p>
@@ -127,7 +140,11 @@ export function Overview({ data, onExplore, metric, setMetric, result, setStart,
           <div className="recap-change"><b>{row.change == null ? "No growth baseline" : signed(row.change)}</b><span>vs {month(result.start!)}</span></div>
           <div className="change-track" aria-hidden="true"><i className="change-zero" /><i className="change-fill" style={{ left: `${row.change != null && row.change < 0 ? 50 - Math.abs(row.change) / maximum * 50 : 50}%`, width: `${Math.abs(row.change ?? 0) / maximum * 50}%` }} /></div>
           <div className="change-axis"><span>Decrease</span><span>0</span><span>Increase</span></div>
-          <div className="secondary-metric"><span>{metric === "volume" ? (category === "dex" ? "Open interest · Hyperliquid only" : category === "cex" ? "Open interest · BTC + ETH only" : "Open interest · month-end") : "Monthly trading volume"}</span><b>{secondary ? dollars(secondary.value) : "Unavailable"}</b></div>
+          {category === "dex" && metric === "volume" && <dl className="recap-volume-split">
+            <div><dt>PaperTrade<small>Separate protocol</small></dt><dd>{paperTrade == null ? "Unavailable" : <><b>{dollars(paperTrade)}</b>{row.value > 0 && <small>{(100 * paperTrade / row.value).toFixed(1)}% of covered DEX volume</small>}</>}</dd></div>
+            <div><dt>Hyperliquid</dt><dd>{hyperliquid == null ? "Unavailable" : <><b>{dollars(hyperliquid)}</b>{cex != null && cex > 0 && <small>{(100 * hyperliquid / cex).toFixed(1)}% of covered CEX volume</small>}</>}</dd></div>
+          </dl>}
+          <div className="secondary-metric"><span>{metric === "volume" ? (category === "dex" ? "Open interest · Hyperliquid only" : category === "cex" ? "Open interest · BTC + ETH only" : "Open interest · month-end") : category === "dex" ? "Hyperliquid monthly trading volume" : "Monthly trading volume"}</span><b>{secondary != null ? dollars(secondary) : "Unavailable"}</b></div>
           <a className="recap-link" href="#venues" onClick={() => onExplore(category, metric)} aria-label={`Explore ${LABELS[category]} ${metric === "volume" ? "trading volume" : "open interest"}`}>Explore this category <span aria-hidden="true">↘</span></a>
         </article>;
       })}
@@ -238,18 +255,21 @@ export function Relationships({ data, metric, overview, setPeriod, controls }: {
   </section>;
 }
 
-type BreakdownView = "snapshot" | "month";
+type BreakdownView = keyof typeof BREAKDOWN_VIEW_LABELS;
+type OiBreakdownRow = { group: string; oi: number; oiShare: number };
+type PairedBreakdownRow = OiBreakdownRow & { volume: number; volumeShare: number; gap: number; turnover: number | null };
 type ResolvedBreakdown = {
   venue: NonNullable<DashboardData["composition"]>["venues"][number];
   dimension: string;
-  views: Record<BreakdownView, { volumeMetric: string; oiMetric: string } | null>;
+  views: Partial<Record<BreakdownView, { volumeMetric: string | null; oiMetric: string }>>;
   view: BreakdownView;
-  volumeMetric: string;
+  volumeMetric: string | null;
   oiMetric: string;
-  viewNote: string | null;
   dateOptions: { value: string; available: boolean }[];
   collectedAtByDate: Record<string, string>;
+  latestDate: string;
   isLatest: boolean;
+  viewNote: string | null;
   contracts: boolean;
   comparison: {
     date?: string;
@@ -258,7 +278,7 @@ type ResolvedBreakdown = {
     volumeTotal: number;
     oiTotal: number;
     reason: string | null;
-    rows: { group: string; volume: number; oi: number; volumeShare: number; oiShare: number; gap: number; turnover: number | null }[];
+    rows: (OiBreakdownRow | PairedBreakdownRow)[];
   };
 };
 
@@ -269,34 +289,46 @@ export function Breakdown({ data, initialState }: { data: DashboardData; initial
   const [state, dispatch] = useReducer(breakdownReducer, { ...initialBreakdownState, ...initialState });
   const resolved = resolveBreakdown(data.composition, state) as ResolvedBreakdown | null;
   if (!resolved || !data.composition) return null;
-  const { venue, dimension, views, view, volumeMetric, oiMetric, viewNote, dateOptions, collectedAtByDate, isLatest, contracts, comparison: result } = resolved;
+  const { venue, dimension, views, view, volumeMetric, oiMetric, dateOptions, collectedAtByDate, latestDate, isLatest, viewNote, contracts, comparison: result } = resolved;
   const { showAll } = state;
+  const oiOnly = view === "monthEndOi";
+  const modes = Object.keys(views) as BreakdownView[];
   const volumePeriod = volumeMetric === "volume24h" ? "Trading · rolling 24 hours" : volumeMetric === "volume30d" ? "Trading · rolling 30 days" : "Trading · full month";
   const interestPeriod = oiMetric === "averageOi" ? "Open interest · daily average" : "Open interest · at collection";
   const value = (amount: number) => contracts ? `${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(amount)} contracts` : dollars(amount);
-  const featured = result.rows[0];
+  const pairedRows = result.rows as PairedBreakdownRow[];
+  const featured = pairedRows[0];
   const isOld = !result.rows.length ? false : result.snapshot ? !result.observedAt || Date.parse(now) - Date.parse(result.observedAt) > 3 * 86400000 : (result.date ?? "").slice(0, 7) < data.meta.completeThrough;
-  const windowNote = result.date ? (result.snapshot
+  const windowNote = result.date && volumeMetric ? (result.snapshot
     ? `Shows ${VOLUME_WINDOWS[volumeMetric]} and open interest at collection. It is not a total for ${month(result.date)}.`
-    : `Shows ${VOLUME_WINDOWS[volumeMetric]} and daily-average open interest.`) : "";
-  const reconciliation = venue.id === "hyperliquid" && view === "snapshot" ? hyperliquidOiReconciliation(data) : null;
+    : `Shows ${VOLUME_WINDOWS[volumeMetric]} and daily-average open interest.${venue.id === "hyperliquid" ? " Source: archived 21Shares/Dune data." : ""}`) : "";
   return <section className="section-block breakdown-section" id="breakdown" aria-labelledby="breakdown-title">
-    <div className="section-head"><div><p className="section-kicker">Look inside a platform</p><h2 id="breakdown-title">Lots of trading, little open interest?</h2><p>Compare each segment’s share of trading with its share of open interest. A difference is a clue to explore, not proof of inflated activity.</p><div className={`breakdown-context ${isOld ? "is-old" : ""}`}><b>{venue.label}</b><span>{!result.rows.length ? `${BREAKDOWN_VIEW_LABELS[view]} unavailable for this selection` : result.snapshot ? `Collected ${result.observedAt ? `${dayTime(result.observedAt)} UTC` : "date unknown"}` : `Full calendar month: ${result.date ? month(result.date) : "unavailable"}`}</span>{result.rows.length > 0 && <span>{windowNote}{contracts ? " Contract counts, not USD." : ""}</span>}{isOld && <span className="older-observation">{isLatest ? "Older data · newer observations are unavailable for this view." : "Older selection · a newer period is available."}</span>}</div></div><a className="section-jump" href="#composition">Explore the history ↗</a></div>
-    <div className="breakdown-controls">
+    <div className="section-head"><div><p className="section-kicker">Look inside a platform</p>
+      <h2 id="breakdown-title">{oiOnly ? "Where was open interest concentrated?" : "Lots of trading, little open interest?"}</h2>
+      <p>{oiOnly ? "See which segments accounted for open interest at month-end. Trading volume is not part of this view." : "Compare each segment’s share of trading with its share of open interest. A difference is a clue to explore, not proof of inflated activity."}</p>
+      <div className={`breakdown-context ${isOld ? "is-old" : ""}`}><b>{venue.label}</b>
+        <span>{!result.rows.length ? `${BREAKDOWN_VIEW_LABELS[view]} unavailable for this selection` : result.snapshot ? `Collected ${result.observedAt ? `${dayTime(result.observedAt)} UTC` : "date unknown"}` : `${BREAKDOWN_VIEW_LABELS[view]}: ${result.date ? month(result.date) : "unavailable"}`}</span>
+        {result.rows.length > 0 && <span>{oiOnly ? <>Final hourly reading of the month from <a href="https://huggingface.co/datasets/ironflow/hyperliquid-open-interest">Ironflow</a>. Each open contract is counted once. Only verified months are listed.</> : windowNote}{contracts ? " Contract counts, not USD." : ""}</span>}
+        {isOld && <span className="older-observation">{isLatest ? "Older data · newer observations are unavailable for this view." : "Older selection · a newer period is available."}</span>}
+      </div></div><a className="section-jump" href="#composition">Explore the history ↗</a></div>
+    <div className={`breakdown-controls ${modes.length === 1 ? "single-view" : ""}`}>
       <label>Platform<select aria-label="Platform" value={venue.id} onChange={(event) => dispatch({ type: "platform", value: event.target.value })}>{data.composition.venues.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
       <label>Group by<select aria-label="Group by" value={dimension} onChange={(event) => dispatch({ type: "groupBy", value: event.target.value })}>{venue.dimensions.map((item) => <option key={item.id} value={item.id}>{dimensionLabel(item)}</option>)}</select></label>
-      <label>View<select aria-label="View" value={view} onChange={(event) => dispatch({ type: "view", value: event.target.value })}>{(["snapshot", "month"] as const).map((item) => <option key={item} value={item} disabled={!views[item]}>{BREAKDOWN_VIEW_LABELS[item]}{views[item] ? "" : " · not offered"}</option>)}</select></label>
-      <label>{result.snapshot ? "Snapshot month" : "Calendar month"}<select aria-label={result.snapshot ? "Snapshot month" : "Calendar month"} value={result.date ?? ""} onChange={(event) => dispatch({ type: "date", value: event.target.value })}>{dateOptions.map((option) => <option key={option.value} value={option.value}>{month(option.value)}{!option.available ? " · unavailable" : result.snapshot && collectedAtByDate[option.value] ? ` · collected ${shortDay(collectedAtByDate[option.value])}` : ""}</option>)}</select></label>
+      {modes.length > 1 && <label>View<select aria-label="View" value={view} onChange={(event) => dispatch({ type: "view", value: event.target.value })}>{modes.map((item) => <option key={item} value={item}>{BREAKDOWN_VIEW_LABELS[item]}</option>)}</select></label>}
+      <label>{result.snapshot ? "Snapshot month" : "Calendar month"}<select aria-label={result.snapshot ? "Snapshot month" : "Calendar month"} value={result.date ?? ""} onChange={(event) => dispatch({ type: "date", value: event.target.value })}>{dateOptions.map((option) => <option key={option.value} value={option.value} disabled={!option.available}>{month(option.value)}{!option.available ? " · unavailable" : result.snapshot && collectedAtByDate[option.value] ? ` · collected ${shortDay(collectedAtByDate[option.value])}` : ""}</option>)}</select></label>
       {viewNote && <p className="group-help">{viewNote}</p>}
       {dimension === "operator" && <p className="group-help">Market provider = who lists the contract. This may differ from the issuer of the underlying asset.</p>}
     </div>
-    {!result.rows.length ? <p className="insight-note breakdown-unavailable" role="status">{result.reason}</p> : <>
+    {!result.rows.length ? <div className="insight-note breakdown-unavailable"><span role="status">{result.reason}</span>{" "}<button className="text-button" onClick={() => dispatch({ type: "date", value: latestDate })}>Use latest available month</button></div> : oiOnly ? <>
+      <div className="breakdown-reading"><p>Share of {value(result.oiTotal)} in open interest: <b>{result.rows[0].group}</b> · <strong>{result.rows[0].oiShare.toFixed(1)}%</strong></p></div>
+      <div className="share-rows">{(showAll ? result.rows : result.rows.slice(0, 6)).map((row) => <div className="share-row" key={row.group}><b>{row.group}</b><div className="paired-bars"><div><span className="sr-only">Open interest share</span><i className="interest-fill" style={{ width: `${row.oiShare}%` }} /><em>{row.oiShare.toFixed(1)}%</em></div></div><span className="gap-description">{value(row.oi)}</span></div>)}</div>
+    </> : <>
       <div className="breakdown-reading"><p><b>{featured.group}</b> accounts for <strong>{featured.volumeShare.toFixed(1)}%</strong> of trading and <strong>{featured.oiShare.toFixed(1)}%</strong> of open interest.</p><span>Largest share difference in this breakdown. Short holding periods or contract settlement can also create a gap.</span></div>
       <div className="share-key"><span><i className="trading-key" />{volumePeriod} <b>{value(result.volumeTotal)}</b></span><span><i className="interest-key" />{interestPeriod} <b>{value(result.oiTotal)}</b></span><small>Each bar runs from 0% to 100% of its own total.</small></div>
-      <div className="share-rows">{(showAll ? result.rows : result.rows.slice(0, 6)).map((row) => <div className="share-row" key={row.group}><b>{row.group}</b><div className="paired-bars"><div><span className="sr-only">Trading share</span><i className="trading-fill" style={{ width: `${row.volumeShare}%` }} /><em>{row.volumeShare.toFixed(1)}%</em></div><div><span className="sr-only">Open-interest share</span><i className="interest-fill" style={{ width: `${row.oiShare}%` }} /><em>{row.oiShare.toFixed(1)}%</em></div></div><span className="gap-description">{Math.abs(row.gap).toFixed(1)} points {row.gap >= 0 ? "more trading share" : "more open-interest share"}</span></div>)}</div>
-      {result.rows.length > 6 && <button className="text-button show-segments" onClick={() => dispatch({ type: "showAll" })}>{showAll ? "Show fewer segments" : `Show all ${result.rows.length} segments`}</button>}
-      <details className="source-details"><summary>Exact values and how to read them</summary><p className="insight-note">Share difference = trading share minus open-interest share, in percentage points. Trading ÷ open interest measures turnover over the labelled trading period; it is not a fraud score. {contracts ? "Kalshi supplies contract counts here, not dollars spent." : "Values use the provider’s USD-notional convention, not cash deposits."} {dimension === "operator" ? "An operator lists the market; it is not necessarily the legal issuer of the underlying asset." : "Unresolved classifications remain Unclassified."}{reconciliation ? ` Official open-interest snapshots differ from the historical vendor total: ${dollars(reconciliation.officialValue)} vs ${dollars(reconciliation.vendorValue)} on ${reconciliation.vendorDate}. Shares here use the official snapshot only.` : ""}</p><div className="quality-table" role="table" aria-label="Activity breakdown values"><div className="quality-table-row quality-table-header" role="row"><span role="columnheader">Segment</span><span role="columnheader">Trading</span><span role="columnheader">Trading share</span><span role="columnheader">Open interest</span><span role="columnheader">OI share</span><span role="columnheader">Difference</span><span role="columnheader">Trading ÷ OI</span></div>{result.rows.map((row) => <div className="quality-table-row" role="row" key={row.group}><b role="cell">{row.group}</b><span role="cell">{value(row.volume)}</span><span role="cell">{row.volumeShare.toFixed(1)}%</span><span role="cell">{value(row.oi)}</span><span role="cell">{row.oiShare.toFixed(1)}%</span><span role="cell">{row.gap > 0 ? "+" : ""}{row.gap.toFixed(1)} pp</span><span role="cell">{row.turnover == null ? "Unavailable" : `${row.turnover.toFixed(2)}×`}</span></div>)}</div></details>
+      <div className="share-rows">{(showAll ? pairedRows : pairedRows.slice(0, 6)).map((row) => <div className="share-row" key={row.group}><b>{row.group}</b><div className="paired-bars"><div><span className="sr-only">Trading share</span><i className="trading-fill" style={{ width: `${row.volumeShare}%` }} /><em>{row.volumeShare.toFixed(1)}%</em></div><div><span className="sr-only">Open-interest share</span><i className="interest-fill" style={{ width: `${row.oiShare}%` }} /><em>{row.oiShare.toFixed(1)}%</em></div></div><span className="gap-description">{Math.abs(row.gap).toFixed(1)} points {row.gap >= 0 ? "more trading share" : "more open-interest share"}</span></div>)}</div>
+      <details className="source-details"><summary>Exact values and how to read them</summary><p className="insight-note">Share difference = trading share minus open-interest share, in percentage points. Trading ÷ open interest measures turnover over the labelled trading period; it is not a fraud score. {contracts ? "Kalshi supplies contract counts here, not dollars spent." : "Values use the provider’s USD-notional convention, not cash deposits."} {dimension === "operator" ? "An operator lists the market; it is not necessarily the legal issuer of the underlying asset." : "Unresolved classifications remain Unclassified."}</p><div className="quality-table" role="table" aria-label="Activity breakdown values"><div className="quality-table-row quality-table-header" role="row"><span role="columnheader">Segment</span><span role="columnheader">Trading</span><span role="columnheader">Trading share</span><span role="columnheader">Open interest</span><span role="columnheader">OI share</span><span role="columnheader">Difference</span><span role="columnheader">Trading ÷ OI</span></div>{pairedRows.map((row) => <div className="quality-table-row" role="row" key={row.group}><b role="cell">{row.group}</b><span role="cell">{value(row.volume)}</span><span role="cell">{row.volumeShare.toFixed(1)}%</span><span role="cell">{value(row.oi)}</span><span role="cell">{row.oiShare.toFixed(1)}%</span><span role="cell">{row.gap > 0 ? "+" : ""}{row.gap.toFixed(1)} pp</span><span role="cell">{row.turnover == null ? "Unavailable" : `${row.turnover.toFixed(2)}×`}</span></div>)}</div></details>
     </>}
+      {result.rows.length > 6 && <button className="text-button show-segments" onClick={() => dispatch({ type: "showAll" })}>{showAll ? "Show fewer segments" : `Show all ${result.rows.length} segments`}</button>}
   </section>;
 }
 
@@ -304,5 +336,5 @@ export function DataHealth({ data }: { data: DashboardData }) {
   const now = useClock();
   const rows = dataHealth(data, now);
   const reconciliation = hyperliquidOiReconciliation(data);
-  return <details className="source-details data-health" id="data-health"><summary>Data freshness · see what is current and what is behind</summary><p className="insight-note">The site checks sources twice a day at 07:00 and 15:00 UTC, even when your laptop is off. A new file or a successful check does not prove a source has new data, so each feed lists its last check, its verified observation cutoff and its latest complete month separately. Current feeds are flagged after 3 days; historical feeds are flagged when the latest complete month is missing. Failed checks preserve the last valid data, dated.</p><div className="health-grid">{rows.map((row) => <article key={row.id}><div><b>{row.label}</b><span className={row.status === "current" ? "health-ok" : "health-behind"}>{row.status === "current" ? "Recent" : row.status === "behind" ? "Behind" : "Cutoff unknown"}</span></div><p>Last checked: {row.checkedAt ? `${dayTime(row.checkedAt)} UTC` : "unknown"}{row.retrievedAt && row.checkedAt && row.retrievedAt.slice(0, 10) !== row.checkedAt.slice(0, 10) ? ` · Last retrieved: ${day(row.retrievedAt)}` : ""}{row.sourceUpdatedAt ? ` · Vendor file stamp: ${day(row.sourceUpdatedAt)}` : ""}</p><p>Verified observation cutoff: {row.observed ? day(row.observed) : "unknown (source gives no date for its partial month)"}</p><p>Latest complete month: {row.complete ? month(row.complete) : "none verified"}</p>{row.failure && <p className="health-failure">Retained, not new: {row.failure}</p>}{row.note && <p className="health-failure">{row.note}</p>}</article>)}</div><p className="insight-note">Free historical Hyperliquid breakdowns remain limited by the upstream archive. Current official snapshots update separately. Scheduled checks can be delayed; this is a research dashboard, not a live trading feed.{reconciliation ? ` Hyperliquid open interest is unresolved between sources: The Block’s historical total is ${dollars(reconciliation.vendorValue)} (${day(reconciliation.vendorDate)}) and the official snapshot sum is ${dollars(reconciliation.officialValue)} (${reconciliation.collectedAt ? `${dayTime(reconciliation.collectedAt)} UTC` : day(reconciliation.officialDate)}), a ratio of ${reconciliation.ratio.toFixed(2)}×. Neither is adjusted, and the two are not combined.` : ""}</p></details>;
+  return <details className="source-details data-health" id="data-health"><summary>Data freshness · see what is current and what is behind</summary><p className="insight-note">The site checks sources twice a day at 07:00 and 15:00 UTC, even when your laptop is off. A new file or a successful check does not prove a source has new data, so each feed lists its last check, its verified observation cutoff and its latest complete month separately. Current feeds are flagged after 3 days; historical feeds are flagged when the latest complete month is missing. Failed checks preserve the last valid data, dated.</p><div className="health-grid">{rows.map((row) => <article key={row.id}><div><b>{row.label}</b><span className={row.status === "current" ? "health-ok" : "health-behind"}>{row.status === "current" ? "Recent" : row.status === "behind" ? "Behind" : "Cutoff unknown"}</span></div><p>Last checked: {row.checkedAt ? `${dayTime(row.checkedAt)} UTC` : "unknown"}{row.retrievedAt && row.checkedAt && row.retrievedAt.slice(0, 10) !== row.checkedAt.slice(0, 10) ? ` · Last retrieved: ${day(row.retrievedAt)}` : ""}{row.sourceUpdatedAt ? ` · Vendor file stamp: ${day(row.sourceUpdatedAt)}` : ""}</p><p>Verified observation cutoff: {row.observed ? day(row.observed) : "unknown (source gives no date for its partial month)"}</p><p>Latest complete month: {row.complete ? month(row.complete) : "none verified"}</p>{row.failure && <p className="health-failure">Retained, not new: {row.failure}</p>}{row.note && <p className="health-failure">{row.note}</p>}</article>)}</div><p className="insight-note">Hyperliquid’s official snapshots and Ironflow month-end archive count each open contract once. The older paired Dune history is separate. Scheduled checks can be delayed.{reconciliation?.sameDate ? ` Same-day cross-check for ${day(reconciliation.vendorDate)}: official snapshot ${dollars(reconciliation.officialValue)}; historical vendor ${dollars(reconciliation.vendorValue)}. Collection times can differ.` : ""}</p></details>;
 }
