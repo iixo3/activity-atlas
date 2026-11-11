@@ -16,52 +16,52 @@ const REFRESH_LOCK = path.join(NORMALIZED_DIR, ".refresh.lock");
 
 const SOURCE_DEFS = {
   cexVolume: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/crypto-markets/futures/total-futures-volumes",
-    page: "https://www.theblock.co/data/crypto-markets/futures/total-futures-volumes",
+    api: "https://www.theblock.co/api/tbco/charts/chart/futures/total-futures-volumes",
+    page: "https://www.theblock.co/data/futures/total-futures-volumes",
   },
   binancePerpVolume: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/derivatives/hyperliquid-vs-binance-monthly-perpetual-volumes",
-    page: "https://www.theblock.co/data/decentralized-finance/derivatives/hyperliquid-vs-binance-monthly-perpetual-volumes",
+    api: "https://www.theblock.co/api/tbco/charts/chart/perpetuals/hyperliquid-vs-binance-monthly-perpetual-volumes",
+    page: "https://www.theblock.co/data/perpetuals/hyperliquid-vs-binance-monthly-perpetual-volumes",
   },
   coinbaseVolume: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/crypto-markets/futures/coinbase-international-daily-volume",
-    page: "https://www.theblock.co/data/crypto-markets/futures/coinbase-international-daily-volume",
+    api: "https://www.theblock.co/api/tbco/charts/chart/futures/coinbase-international-daily-volume",
+    page: "https://www.theblock.co/data/futures/coinbase-international-daily-volume",
   },
   bitcoinOi: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/crypto-markets/futures/aggregated-open-interest-of-bitcoin-futures-daily",
-    page: "https://www.theblock.co/data/crypto-markets/futures/aggregated-open-interest-of-bitcoin-futures-daily",
+    api: "https://www.theblock.co/api/tbco/charts/chart/futures/aggregated-open-interest-of-bitcoin-futures-daily",
+    page: "https://www.theblock.co/data/futures/aggregated-open-interest-of-bitcoin-futures-daily",
   },
   ethereumOi: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/crypto-markets/futures/aggregated-open-interest-of-ethereum-futures-daily",
-    page: "https://www.theblock.co/data/crypto-markets/futures/aggregated-open-interest-of-ethereum-futures-daily",
+    api: "https://www.theblock.co/api/tbco/charts/chart/futures/aggregated-open-interest-of-ethereum-futures-daily",
+    page: "https://www.theblock.co/data/futures/aggregated-open-interest-of-ethereum-futures-daily",
   },
   dexVolume: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/derivatives/perpetual-protocol-trade-volume",
-    page: "https://www.theblock.co/data/decentralized-finance/derivatives/perpetual-protocol-trade-volume",
+    api: "https://www.theblock.co/api/tbco/charts/chart/perpetuals/perpetual-protocol-trade-volume",
+    page: "https://www.theblock.co/data/perpetuals/perpetual-protocol-trade-volume",
   },
   hyperliquidOi: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/derivatives/hyperliquid-open-interest",
-    page: "https://www.theblock.co/data/decentralized-finance/derivatives/hyperliquid-open-interest",
+    api: "https://www.theblock.co/api/tbco/charts/chart/perpetuals/hyperliquid-open-interest",
+    page: "https://www.theblock.co/data/perpetuals/hyperliquid-open-interest",
   },
   predictionVolume: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/prediction-markets/polymarket-and-kalshi-volume-monthly",
-    page: "https://www.theblock.co/data/decentralized-finance/prediction-markets/polymarket-and-kalshi-volume-monthly",
+    api: "https://www.theblock.co/api/tbco/charts/chart/prediction-markets/polymarket-and-kalshi-volume-monthly",
+    page: "https://www.theblock.co/data/prediction-markets/polymarket-and-kalshi-volume-monthly",
   },
   predictionOi: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/prediction-markets/polymarket-and-kalshi-open-interest-daily",
-    page: "https://www.theblock.co/data/decentralized-finance/prediction-markets/polymarket-and-kalshi-open-interest-daily",
+    api: "https://www.theblock.co/api/tbco/charts/chart/prediction-markets/polymarket-and-kalshi-open-interest-daily",
+    page: "https://www.theblock.co/data/prediction-markets/polymarket-and-kalshi-open-interest-daily",
   },
   polymarketTraders: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/prediction-markets/polymarket-active-traders-monthly",
-    page: "https://www.theblock.co/data/decentralized-finance/prediction-markets/polymarket-active-traders-monthly",
+    api: "https://www.theblock.co/api/tbco/charts/chart/prediction-markets/polymarket-active-traders-monthly",
+    page: "https://www.theblock.co/data/prediction-markets/polymarket-active-traders-monthly",
   },
   polymarketMarkets: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/prediction-markets/polymarket-new-markets-monthly",
-    page: "https://www.theblock.co/data/decentralized-finance/prediction-markets/polymarket-new-markets-monthly",
+    api: "https://www.theblock.co/api/tbco/charts/chart/prediction-markets/polymarket-new-markets-monthly",
+    page: "https://www.theblock.co/data/prediction-markets/polymarket-new-markets-monthly",
   },
   kalshiActiveMarkets: {
-    api: "https://www.theblock.co/api/tbco/charts/chart/decentralized-finance/prediction-markets/kalshi-daily-active-markets",
-    page: "https://www.theblock.co/data/decentralized-finance/prediction-markets/kalshi-daily-active-markets",
+    api: "https://www.theblock.co/api/tbco/charts/chart/prediction-markets/kalshi-daily-active-markets",
+    page: "https://www.theblock.co/data/prediction-markets/kalshi-daily-active-markets",
   },
 };
 
