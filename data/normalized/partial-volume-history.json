@@ -11612,6 +11612,156 @@
           "projectionUnavailableReason": null
         }
       }
+    },
+    {
+      "retrievedAt": "2026-11-21T11:42:31.067Z",
+      "month": "2026-11",
+      "series": {
+        "category-cex-volume": {
+          "value": 1431968448246.5918,
+          "asOfDate": null,
+          "projectionValue": 2147952672369.8877,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "category-dex-volume": {
+          "value": 428450417861.56616,
+          "asOfDate": null,
+          "projectionValue": 642675626792.3492,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "category-prediction-volume": {
+          "value": 88316081130.22682,
+          "asOfDate": "2026-11-19",
+          "projectionValue": 139446443889.83182,
+          "projectionCoveredDays": 19,
+          "projectionCoverageBasis": "observed-source-date",
+          "projectionUnavailableReason": null
+        },
+        "cex-binance-volume": {
+          "value": 1216906464942.937,
+          "asOfDate": null,
+          "projectionValue": 1825359697414.4055,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "cex-bybit-volume": {
+          "value": 196228856581.184,
+          "asOfDate": null,
+          "projectionValue": 294343284871.776,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "cex-kraken-volume": {
+          "value": 18833126722.4706,
+          "asOfDate": null,
+          "projectionValue": 28249690083.705902,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-aster-volume": {
+          "value": 41212254463,
+          "asOfDate": null,
+          "projectionValue": 61818381694.5,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-dydx-volume": {
+          "value": 651686699,
+          "asOfDate": null,
+          "projectionValue": 977530048.5,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-hyperliquid-volume": {
+          "value": 206797037922,
+          "asOfDate": null,
+          "projectionValue": 310195556883,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-jupiter-volume": {
+          "value": 8442607416,
+          "asOfDate": null,
+          "projectionValue": 12663911124,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-apex-volume": {
+          "value": 7049281237,
+          "asOfDate": null,
+          "projectionValue": 10573921855.5,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-synfutures-volume": {
+          "value": 1919008643,
+          "asOfDate": null,
+          "projectionValue": 2878512964.5,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-lighter-volume": {
+          "value": 47413193201,
+          "asOfDate": null,
+          "projectionValue": 71119789801.5,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-variational-volume": {
+          "value": 42100989823,
+          "asOfDate": null,
+          "projectionValue": 63151484734.5,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "dex-papertrade-volume": {
+          "value": 62973592868.56616,
+          "asOfDate": null,
+          "projectionValue": 94460389302.84924,
+          "projectionCoveredDays": 20,
+          "projectionCoverageBasis": "assumed-through-prior-utc-day",
+          "projectionUnavailableReason": null
+        },
+        "prediction-polymarket-volume": {
+          "value": 3108566757.8002586,
+          "asOfDate": "2026-11-19",
+          "projectionValue": 4908263301.789882,
+          "projectionCoveredDays": 19,
+          "projectionCoverageBasis": "observed-source-date",
+          "projectionUnavailableReason": null
+        },
+        "prediction-polymarket-us-volume": {
+          "value": 10157706739.449999,
+          "asOfDate": "2026-11-19",
+          "projectionValue": 16038484325.447367,
+          "projectionCoveredDays": 19,
+          "projectionCoverageBasis": "observed-source-date",
+          "projectionUnavailableReason": null
+        },
+        "prediction-kalshi-volume": {
+          "value": 75049807632.97656,
+          "asOfDate": "2026-11-19",
+          "projectionValue": 118499696262.59457,
+          "projectionCoveredDays": 19,
+          "projectionCoverageBasis": "observed-source-date",
+          "projectionUnavailableReason": null
+        }
+      }
     }
   ]
 }
