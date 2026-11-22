@@ -1221,7 +1221,7 @@ context-polymarket-traders,prediction,Polymarket,activeTraders,2026-07-01,573710
 context-polymarket-traders,prediction,Polymarket,activeTraders,2026-08-01,336309,count,true,observed,polymarketTraders,Monthly active Polymarket traders under The Block's published series definition.,,false,,,,,,,,,,,,,
 context-polymarket-traders,prediction,Polymarket,activeTraders,2026-09-01,283875,count,true,observed,polymarketTraders,Monthly active Polymarket traders under The Block's published series definition.,,false,,,,,,,,,,,,,
 context-polymarket-traders,prediction,Polymarket,activeTraders,2026-10-01,277014,count,true,observed,polymarketTraders,Monthly active Polymarket traders under The Block's published series definition.,,false,,,,,,,,,,,,,
-context-polymarket-traders,prediction,Polymarket,activeTraders,2026-11-01,196823,count,false,observed,polymarketTraders,Monthly active Polymarket traders under The Block's published series definition.,,false,,,,,,,,,,,,,
+context-polymarket-traders,prediction,Polymarket,activeTraders,2026-11-01,201048,count,false,observed,polymarketTraders,Monthly active Polymarket traders under The Block's published series definition.,,false,,,,,,,,,,,,,
 context-polymarket-new-markets,prediction,Polymarket,newMarkets,2020-09-01,1,count,true,observed,polymarketMarkets,New Polymarket markets created per month.,,false,,,,,,,,,,,,,
 context-polymarket-new-markets,prediction,Polymarket,newMarkets,2020-10-01,33,count,true,observed,polymarketMarkets,New Polymarket markets created per month.,,false,,,,,,,,,,,,,
 context-polymarket-new-markets,prediction,Polymarket,newMarkets,2020-11-01,45,count,true,observed,polymarketMarkets,New Polymarket markets created per month.,,false,,,,,,,,,,,,,
